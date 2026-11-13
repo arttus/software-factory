@@ -14,7 +14,8 @@ Usage:
   job feedback <job>             needs-human → build, with your feedback (stdin) as feedback-<k>.md
   job reject <job>               needs-info or needs-human → rejected, with your reason (stdin) as rejection.md
   job agents <job> <json>        record the routed agent set (called by factory/bin/route)
-  job sync <job>                 refresh reviews, gate and cost from the job's files
+  job sync <job>                 refresh reviews and gate from the job's files
+  job cost [<job>...]            recompute API-equivalent cost from usage records
   job summary [<job>...]         table of jobs: issue, stage, PR, cost, time
 
 <job> is a job id (004-dark-mode) or an issue number (12).
@@ -324,7 +325,6 @@ def sync(job):
                 line = first_line(rd / f"review-{r}.md")
                 m = re.fullmatch(r"VERDICT:\s*(PASS|CHANGES)", line or "")
                 job["reviews"][r] = m.group(1) if m else ("pending" if line is None else "invalid")
-    job["cost_usd"] = cost_usd(job)
     return job
 
 
@@ -666,11 +666,23 @@ def elapsed(job):
     return f"{minutes // 60}h{minutes % 60:02d}m" if minutes >= 60 else f"{minutes}m"
 
 
+def cmd_cost(args):
+    """Recompute cost off the critical path; `sync` never scans transcripts."""
+    jobs = [resolve(a) for a in args] if args else all_jobs()
+    for job in jobs:
+        job = sync(job)
+        job["cost_usd"] = cost_usd(job)
+        save(job)
+        print(f"{job['id']}: ${job['cost_usd']:.2f}")
+    print(f"total ${sum(job['cost_usd'] for job in jobs):.2f} (API-equivalent, factory agents only)")
+
+
 def cmd_summary(args):
     jobs = [resolve(a) for a in args] if args else all_jobs()
     rows = [("job", "issue", "stage", "round", "pr", "cost", "time")]
     for j in jobs:
         sync(j)  # for display only; the orchestrator owns the saved state
+        j["cost_usd"] = cost_usd(j)  # display only; `job cost` persists it
         rows.append((j["id"], f"#{j['issue']}", j["stage"], str(j["round"]),
                      f"#{j['pr']}" if j["pr"] else "-", f"${j['cost_usd']:.2f}", elapsed(j)))
     widths = [max(len(r[i]) for r in rows) for i in range(len(rows[0]))]
@@ -706,6 +718,8 @@ def main(argv):
             save(job)
             reviews = " ".join(f"{k}:{v}" for k, v in job["reviews"].items())
             print(f"{job['id']}: {job['stage']} round {job['round']} gate {job['gate'] or '-'} {reviews}".rstrip())
+        elif cmd == "cost":
+            cmd_cost(args)
         elif cmd == "summary":
             cmd_summary(args)
         else:

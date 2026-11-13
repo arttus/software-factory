@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/factory/invocation.schema.json",
+  "title": "Factory invocation request",
+  "type": "object",
+  "required": ["schema", "invocation_id", "job_id", "stage", "round", "attempt",
+               "role", "controller_root", "job_dir", "instruction_path",
+               "instruction_digest", "outputs", "profile", "adapter", "model",
+               "required_capabilities", "permission_profile", "created_at"],
+  "properties": {
+    "schema": { "const": "factory.invocation.request/1" },
+    "invocation_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+    "job_id": { "type": "string", "minLength": 1 },
+    "stage": { "type": "string", "minLength": 1 },
+    "round": { "type": "integer", "minimum": 0 },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "role": { "type": "string", "minLength": 1 },
+    "controller_root": { "type": "string", "pattern": "^/" },
+    "job_dir": { "type": "string", "pattern": "^/" },
+    "worktree": { "type": ["string", "null"], "pattern": "^/" },
+    "branch": { "type": ["string", "null"] },
+    "input_commit": { "type": ["string", "null"] },
+    "instruction_path": { "type": "string", "pattern": "^[^/]" },
+    "instruction_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^/" },
+          "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+          "role": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "outputs": { "type": "array", "items": { "type": "string", "pattern": "^[^/]" } },
+    "profile": { "type": "string" },
+    "adapter": { "type": "string" },
+    "provider": { "type": ["string", "null"] },
+    "model": { "type": "string", "minLength": 1 },
+    "reasoning": { "type": "object" },
+    "required_capabilities": { "type": "array", "items": { "type": "string" } },
+    "permission_profile": { "type": "string" },
+    "deadline_seconds": { "type": ["integer", "null"], "minimum": 0 },
+    "cancel_grace_seconds": { "type": "integer", "minimum": 0 },
+    "browser": { "type": ["object", "null"] },
+    "session_id": { "type": ["string", "null"] },
+    "auth_ref": { "type": ["string", "null"] },
+    "created_at": { "type": "string", "minLength": 1 }
+  }
+}

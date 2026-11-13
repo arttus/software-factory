@@ -63,6 +63,30 @@ You approve by merging the PR on GitHub. To change an escalated PR, tell the
 factory what you want with `/factory`. To drop a job that waits on you or on
 its author, tell the factory to reject it.
 
+## Harness agnostic (foundation)
+
+The factory is moving off Claude-specific orchestration. The foundation is in
+place while the Claude skill stays the working entry point:
+
+- `factory/roles/` is the canonical, portable source for the eight role
+  instructions. No harness tool names, model aliases or hooks.
+- `factory/core/` holds versioned invocation/result/event contracts, profile and
+  routing resolution, capability and permission checks, artifact promotion,
+  leases, a GitHub boundary and a controller skeleton.
+- `factory/adapters/` defines the adapter interface and a deterministic fake
+  harness used by the tests.
+- `factory/schemas/` documents config, invocation, result and event shapes.
+- `factory/bin/doctor` preflights config, profiles, roles and harness binaries.
+  `factory/bin/run --plan` resolves profiles and routing; `run --smoke` drives
+  one fake invocation through the controller.
+- `factory/checks.sh` now runs the project's real Python checks and test suite.
+
+Execution profiles in `factory/config.json` (`schema_version: 2`) name an
+adapter, model and permission profile. `factory/bin/route` resolves the same
+profiles back to Claude model aliases, so there is one routing source of truth
+during migration. Process-backed Kilo, Codex and Claude adapters come next; see
+[`docs/harness-agnostic-factory-spec.md`](docs/harness-agnostic-factory-spec.md).
+
 ## The guide
 
 This folder is the companion to **A Developer's Guide to Software Factories**,
@@ -96,12 +120,19 @@ you a copy when you [sign up to my newsletter](https://zazencodes.com/newsletter
     reviewer-ui.md            haiku    only when intake flags `ui`
     approver.md               opus     APPROVE or ESCALATE
 factory/
-  config.json                 concurrency, rounds, labels, routing, protected paths, prices
-  checks.sh                   your repo's checks (the installer fills it in)
+  config.json                 schema v2: profiles, routing, limits, protected paths
+  checks.sh                   this repo's real checks and test suite
   bin/job                     the only writer of job.json; refuses illegal moves; merges
   bin/gate                    runs checks.sh in a job's worktree → round-N/checks.md
-  bin/route                   risk + surfaces → the job's reviewers and models
+  bin/route                   risk + surfaces → profiles → the job's reviewers
+  bin/doctor                  preflight config, profiles, roles and harness binaries
+  bin/run                     controller entry point: --plan, --smoke
+  roles/                      portable role instructions (canonical)
+  core/                       contracts, config, capabilities, artifacts, leases, controller
+  adapters/                   adapter interface and deterministic fake harness
+  schemas/                    config, invocation, result and event schemas
   dashboard.html              the board
+tests/                        deterministic tests for transitions, contracts and adapters
 examples/jobs/                finished jobs from a real run
 INSTALL.md                    instructions for the installing agent
 DESIGN.md                     how it works and why

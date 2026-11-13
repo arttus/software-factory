@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""Controller entry point (foundation build).
+
+Usage:
+  run --plan            resolve profiles and routing without launching work
+  run --smoke           run one fake-builder invocation through the controller
+  run <issue>           explain what still has to land before jobs run here
+
+The controller writes invocation evidence under
+factory/jobs/<job-id>/runs/<invocation-id>/ and never advances a job stage.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+import tempfile
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO))
+
+from factory.adapters.fake import FakeAdapter  # noqa: E402
+from factory.core.config import ConfigError, load_config  # noqa: E402
+from factory.core.controller import Controller, ControllerError  # noqa: E402
+from factory.core.contracts import InvocationRequest, new_invocation_id, utc_now  # noqa: E402
+from factory.core.roles import RoleError, load_roles  # noqa: E402
+
+CONFIG_PATH = REPO / "factory" / "config.json"
+
+
+def plan() -> int:
+    config = load_config(CONFIG_PATH)
+    roles = load_roles(REPO)
+    print(f"schema {config.schema_version}: {len(config.profiles)} profiles, "
+          f"{len(config.adapters)} adapters, {len(roles)} roles")
+    for role in ("intake", "spec", "builder", "approver"):
+        profile = config.role_profile(role)
+        print(f"  {role:<8} → {profile.name} ({profile.adapter}:{profile.model}, "
+              f"{profile.permission_profile})")
+    for risk in ("low", "medium", "high"):
+        resolved = config.reviewers_for(risk)
+        print(f"  risk {risk}: " + ", ".join(f"{role}={p.name}" for role, p in resolved.items()))
+    for surface in ("ui", "security"):
+        resolved = config.reviewers_for("low", [surface])
+        extra = {r: p for r, p in resolved.items() if r != "code"}
+        print(f"  surface {surface}: " + ", ".join(f"{role}={p.name}" for role, p in extra.items()))
+    return 0
+
+
+def smoke() -> int:
+    config = load_config(CONFIG_PATH)
+    roles = load_roles(REPO)
+    with tempfile.TemporaryDirectory(prefix="factory-smoke-") as tmp:
+        root = Path(tmp)
+        job_dir = root / "jobs" / "smoke"
+        job_dir.mkdir(parents=True)
+        role = roles["builder"]
+        request = InvocationRequest(
+            invocation_id=new_invocation_id(),
+            job_id="smoke",
+            stage="build",
+            round=1,
+            attempt=1,
+            role="builder",
+            controller_root=str(REPO),
+            job_dir=str(job_dir),
+            instruction_path=f"factory/roles/{role.name}.md",
+            instruction_digest=role.digest,
+            outputs=["build.md"],
+            profile="fake-builder",
+            adapter="fake",
+            model="fake-model",
+            required_capabilities=list(role.capabilities),
+            permission_profile="builder",
+            created_at=utc_now(),
+        )
+        controller = Controller.from_config(config, root, adapters={"fake": FakeAdapter(root)})
+        result = controller.run(request)
+        output = job_dir / "build.md"
+        print(f"smoke: {result.status} exit {result.exit_code} "
+              f"artifact {output} ({output.stat().st_size} bytes)")
+        runs = list((root / "jobs" / "smoke" / "runs").glob("*/result.json"))
+        print(f"evidence: {len(runs)} result.json")
+        print(f"first line: {output.read_text().splitlines()[0]}")
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    if argv == ["--plan"]:
+        return plan()
+    if argv == ["--smoke"]:
+        return smoke()
+    if len(argv) == 1 and argv[0].isdigit():
+        print("run: controller execution for real issues is not enabled in this build. "
+              "Use /factory run in Claude Code, or run --smoke to exercise the adapter contract.")
+        return 2
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except (ConfigError, RoleError, ControllerError) as exc:
+        print(f"run: {exc}", file=sys.stderr)
+        sys.exit(1)

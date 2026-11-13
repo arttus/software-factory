@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+"""Preflight the harness-agnostic factory without touching GitHub or models.
+
+Usage:
+  doctor            human-readable report; exit 1 on configuration errors
+  doctor --json     machine-readable report
+
+Checks the schema-versioned config, every referenced profile and adapter, the
+portable role files, enforceable permission profiles, and whether each enabled
+harness executable is present. It never posts comments, launches model work or
+writes job state.
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO))
+
+from factory.core.capabilities import (  # noqa: E402
+    check_permission_profile,
+    role_for_profile,
+)
+from factory.core.config import ConfigError, FactoryConfig, load_config  # noqa: E402
+from factory.core.roles import RoleError, load_roles  # noqa: E402
+
+CONFIG_PATH = REPO / "factory" / "config.json"
+CHECKS = REPO / "factory" / "checks.sh"
+
+
+def version_of(executable: str, command: list[str]) -> str | None:
+    try:
+        result = subprocess.run([executable, *command], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    output = (result.stdout or result.stderr).strip().splitlines()
+    return output[0] if output else None
+
+
+def report(config: FactoryConfig, roles) -> dict:
+    errors: list[str] = []
+    warnings: list[str] = []
+    adapters = []
+    for name, adapter in config.adapters.items():
+        executable = None
+        version = None
+        if adapter.executable:
+            executable = shutil.which(adapter.executable)
+            if executable is None and adapter.enabled:
+                errors.append(f"adapter {name!r} is enabled but {adapter.executable!r} is not on PATH")
+            if executable and adapter.version_command:
+                version = version_of(executable, list(adapter.version_command))
+        adapters.append({
+            "name": name,
+            "enabled": adapter.enabled,
+            "executable": adapter.executable,
+            "found": bool(executable) or adapter.executable is None,
+            "version": version,
+            "verified_versions": list(adapter.verified_versions),
+        })
+
+    used = config.profile_names_in_use()
+    for name in sorted(used):
+        profile = config.profile(name)
+        permission = config.permission(profile.permission_profile)
+        role = role_for_profile(config, profile)
+        if role:
+            errors.extend(check_permission_profile(role, permission))
+        if profile.adapter not in ("fake",):
+            warnings.append(f"profile {name!r}: Python adapter {profile.adapter!r} is not "
+                            f"implemented yet; the legacy skill path covers it")
+
+    checks_text = CHECKS.read_text() if CHECKS.exists() else ""
+    if "has no checks yet" in checks_text:
+        warnings.append("factory/checks.sh is still the placeholder; fix it before running jobs")
+
+    return {
+        "config": str(config.path),
+        "schema_version": config.schema_version,
+        "base_branch": config.base_branch,
+        "merge_policy": config.merge_policy,
+        "adapters": adapters,
+        "roles": sorted(config.roles),
+        "role_files": sorted(roles),
+        "routing": {risk: dict(entry) for risk, entry in config.routing.items()},
+        "surface_reviewers": {s: dict(entry) for s, entry in config.surface_reviewers.items()},
+        "limits": config.limits,
+        "errors": errors,
+        "warnings": warnings,
+    }
+
+
+def main(argv: list[str]) -> int:
+    if argv not in ([], ["--json"]):
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    try:
+        config = load_config(CONFIG_PATH)
+        roles = load_roles(REPO)
+    except (ConfigError, RoleError, OSError, json.JSONDecodeError) as exc:
+        print(f"doctor: {exc}", file=sys.stderr)
+        return 1
+
+    data = report(config, roles)
+    if argv == ["--json"]:
+        print(json.dumps(data, indent=2))
+    else:
+        print(f"config {data['config']} (schema {data['schema_version']})")
+        print(f"base {data['base_branch']}, merge policy {data['merge_policy']}")
+        for adapter in data["adapters"]:
+            state = "enabled" if adapter["enabled"] else "disabled"
+            found = "found" if adapter["found"] else "MISSING"
+            version = f" {adapter['version']}" if adapter["version"] else ""
+            print(f"  adapter {adapter['name']}: {state}, {found}{version}")
+        print(f"roles: {', '.join(data['role_files'])}")
+        for warning in data["warnings"]:
+            print(f"warning: {warning}")
+        for error in data["errors"]:
+            print(f"error: {error}")
+    return 1 if data["errors"] else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

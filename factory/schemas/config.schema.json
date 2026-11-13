@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/factory/config.schema.json",
+  "title": "Factory configuration v2",
+  "type": "object",
+  "required": ["schema_version", "base_branch", "labels", "adapters",
+               "permission_profiles", "profiles", "roles", "routing",
+               "surface_reviewers", "limits"],
+  "properties": {
+    "schema_version": { "const": 2 },
+    "base_branch": { "type": "string", "minLength": 1 },
+    "concurrency": { "type": "integer", "minimum": 1 },
+    "max_rounds": { "type": "integer", "minimum": 1 },
+    "merge_method": { "enum": ["merge", "squash", "rebase"] },
+    "merge_policy": { "enum": ["human", "auto"] },
+    "labels": {
+      "type": "object",
+      "required": ["queue", "needs_info", "needs_human"],
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "adapters": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["enabled"],
+        "properties": {
+          "executable": { "type": ["string", "null"] },
+          "enabled": { "type": "boolean" },
+          "version_command": { "type": "array", "items": { "type": "string" } },
+          "verified_versions": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "permission_profiles": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["shell", "network", "write_scope"],
+        "properties": {
+          "shell": { "type": "boolean" },
+          "network": { "type": "boolean" },
+          "write_scope": { "enum": ["output_only", "worktree_and_output", "worktree_only"] }
+        }
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["adapter", "model", "permission_profile"],
+        "properties": {
+          "adapter": { "type": "string" },
+          "model": { "type": "string", "minLength": 1 },
+          "permission_profile": { "type": "string" },
+          "provider": { "type": ["string", "null"] },
+          "reasoning": { "type": "object" },
+          "options": { "type": "object" }
+        }
+      }
+    },
+    "roles": {
+      "type": "object",
+      "required": ["intake", "spec", "builder", "approver"],
+      "additionalProperties": { "type": "string" }
+    },
+    "routing": {
+      "type": "object",
+      "required": ["low", "medium", "high"],
+      "additionalProperties": {
+        "type": "object",
+        "minProperties": 1,
+        "additionalProperties": { "type": "string" }
+      }
+    },
+    "surface_reviewers": {
+      "type": "object",
+      "required": ["ui", "security"],
+      "additionalProperties": {
+        "type": "object",
+        "minProperties": 1,
+        "additionalProperties": { "type": "string" }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "required": ["jobs", "workers"],
+      "properties": {
+        "jobs": { "type": "integer", "minimum": 1 },
+        "workers": { "type": "integer", "minimum": 1 },
+        "per_adapter": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "protected_paths": { "type": "array", "items": { "type": "string" } },
+    "ports": { "type": "object" },
+    "prices_usd_per_mtok": { "type": "object" }
+  }
+}

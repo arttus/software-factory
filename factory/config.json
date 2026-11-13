@@ -1,21 +1,142 @@
 {
+  "schema_version": 2,
   "concurrency": 3,
   "max_rounds": 3,
   "base_branch": "main",
   "merge_method": "merge",
+  "merge_policy": "human",
   "labels": {
     "queue": "factory",
     "needs_info": "factory:needs-info",
     "needs_human": "factory:needs-human"
   },
+  "adapters": {
+    "claude": {
+      "executable": "claude",
+      "enabled": true,
+      "version_command": ["--version"],
+      "verified_versions": ["2.1.257+"]
+    },
+    "kilo": {
+      "executable": "kilo",
+      "enabled": false,
+      "version_command": ["--version"],
+      "verified_versions": []
+    },
+    "codex": {
+      "executable": "codex",
+      "enabled": false,
+      "version_command": ["--version"],
+      "verified_versions": []
+    },
+    "fake": {
+      "executable": null,
+      "enabled": true,
+      "version_command": [],
+      "verified_versions": []
+    }
+  },
+  "permission_profiles": {
+    "intake": {
+      "shell": false,
+      "network": false,
+      "write_scope": "output_only"
+    },
+    "spec": {
+      "shell": true,
+      "network": false,
+      "write_scope": "output_only"
+    },
+    "builder": {
+      "shell": true,
+      "network": true,
+      "write_scope": "worktree_and_output"
+    },
+    "reviewer": {
+      "shell": false,
+      "network": false,
+      "write_scope": "output_only"
+    },
+    "approver": {
+      "shell": true,
+      "network": false,
+      "write_scope": "output_only"
+    }
+  },
+  "profiles": {
+    "claude-intake": {
+      "adapter": "claude",
+      "model": "fable",
+      "permission_profile": "intake"
+    },
+    "claude-spec": {
+      "adapter": "claude",
+      "model": "opus",
+      "permission_profile": "spec"
+    },
+    "claude-builder": {
+      "adapter": "claude",
+      "model": "opus",
+      "permission_profile": "builder"
+    },
+    "claude-approver": {
+      "adapter": "claude",
+      "model": "opus",
+      "permission_profile": "approver"
+    },
+    "claude-code-haiku": {
+      "adapter": "claude",
+      "model": "haiku",
+      "permission_profile": "reviewer"
+    },
+    "claude-code-sonnet": {
+      "adapter": "claude",
+      "model": "sonnet",
+      "permission_profile": "reviewer"
+    },
+    "claude-ux-sonnet": {
+      "adapter": "claude",
+      "model": "sonnet",
+      "permission_profile": "reviewer"
+    },
+    "claude-ui-haiku": {
+      "adapter": "claude",
+      "model": "haiku",
+      "permission_profile": "reviewer"
+    },
+    "claude-security-opus": {
+      "adapter": "claude",
+      "model": "opus",
+      "permission_profile": "reviewer"
+    },
+    "fake-builder": {
+      "adapter": "fake",
+      "model": "fake-model",
+      "permission_profile": "builder"
+    }
+  },
+  "roles": {
+    "intake": "claude-intake",
+    "spec": "claude-spec",
+    "builder": "claude-builder",
+    "approver": "claude-approver"
+  },
   "routing": {
-    "low":    { "code": "haiku" },
-    "medium": { "code": "sonnet" },
-    "high":   { "code": "sonnet" }
+    "low":    { "code": "claude-code-haiku" },
+    "medium": { "code": "claude-code-sonnet" },
+    "high":   { "code": "claude-code-sonnet" }
   },
   "surface_reviewers": {
-    "ui": { "ux": "sonnet", "ui": "haiku" },
-    "security": { "security": "opus" }
+    "ui": { "ux": "claude-ux-sonnet", "ui": "claude-ui-haiku" },
+    "security": { "security": "claude-security-opus" }
+  },
+  "limits": {
+    "jobs": 3,
+    "workers": 4,
+    "per_adapter": {
+      "claude": 3,
+      "fake": 4
+    }
   },
   "protected_paths": [
     "factory/checks.sh",

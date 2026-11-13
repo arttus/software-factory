@@ -136,6 +136,44 @@ break this.
 - One PR per issue; at most `max_rounds` build rounds per job before a human
   is asked.
 
+## Harness-agnostic foundation
+
+The factory is moving to a harness-agnostic controller without breaking the
+Claude path. The pieces below exist now; process-backed Kilo, Codex and Claude
+adapters are the next step.
+
+**Roles are portable.** `factory/roles/*.md` is the canonical source for the
+eight instructions. Their frontmatter carries only an output path, a first-line
+pattern, generic capabilities and whether a browser is needed. No Claude tool
+names, model aliases or hooks. `.claude/agents/` remains the working wrapper
+until the compatibility adapter passes the same contract suite.
+
+**Profiles replace model aliases in routing.** `config.json` is schema version
+2. A profile names an adapter, model selector and permission profile; roles and
+risk/surface routing reference profiles. `factory/bin/route` resolves them back
+to Claude model aliases, so the old skill keeps working from one source of truth.
+
+**Contracts are versioned and adapter-neutral.** `core/contracts.py` defines the
+request, result and event shapes. A result has a terminal status, observed
+model, artifacts with hashes, commit and nullable usage. `completed` means the
+transport finished, not that the work is accepted.
+
+**Capabilities are checked before launch.** Adapters report what they enforce.
+A role that needs a filesystem, shell or network boundary refuses an adapter
+that only prompt-enforces it. `intake` cannot have a shell; reviewers write only
+their review artifact.
+
+**Evidence is durable.** The controller writes
+`factory/jobs/<id>/runs/<invocation-id>/{request,result}.json` and
+`events.jsonl`. Canonical artifacts are promoted atomically. `job` remains the
+only writer of `job.json` and the only decider of stages.
+
+**Cost is off the critical path.** `job sync` no longer scans Claude transcripts;
+`job cost` recomputes usage when asked.
+
+**Determinism first.** A fake adapter and fake GitHub drive every transition and
+artifact contract in `tests/`; `factory/checks.sh` runs the suite.
+
 ## What changed from v1
 
 | v1 | v2 | Asked for by |

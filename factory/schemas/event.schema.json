@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/factory/event.schema.json",
+  "title": "Factory normalized event",
+  "type": "object",
+  "required": ["schema", "invocation_id", "type", "timestamp", "data"],
+  "properties": {
+    "schema": { "const": "factory.invocation.event/1" },
+    "invocation_id": { "type": "string", "minLength": 1 },
+    "type": { "enum": ["started", "progress", "usage", "artifact", "finished"] },
+    "timestamp": { "type": "string", "minLength": 1 },
+    "data": { "type": "object" }
+  }
+}

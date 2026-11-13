@@ -8,4 +8,12 @@ Only that directory was imported. The original license and attribution are prese
 
 This is an independently maintained repository intended to evolve into a model
 and harness agnostic software factory. The initial import retains the original
-Claude Code implementation; adapter work has not started.
+Claude Code implementation.
+
+The harness-agnostic foundation now exists alongside it: portable role
+instructions in `factory/roles/`, versioned invocation contracts, schema-versioned
+execution profiles, capability and permission validation, a deterministic fake
+adapter, a GitHub boundary, a controller skeleton and a test suite. The Claude
+skill and agents are still the working entry point; process-backed Kilo, Codex
+and Claude adapters are the next migration step. See
+[`docs/harness-agnostic-factory-spec.md`](docs/harness-agnostic-factory-spec.md).

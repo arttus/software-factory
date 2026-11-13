@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""Map intake's risk and surfaces to the job's agent set.
+"""Map intake's risk and surfaces to the job's reviewer set.
 
 Usage: route <job-id>
 
 Reads `risk` and `surfaces` from intake.md (through job.json), looks them up in
 config.json's `routing` and `surface_reviewers` tables, and records the result
 in job.json with `job agents`. Prints the agent set.
+
+Routing values are profile names (schema version 2). For the Claude Code
+orchestrator this script resolves each profile to its model alias; a profile
+backed by another adapter is refused here so the legacy path never silently
+runs the wrong harness.
 """
 
 import json
@@ -22,6 +27,22 @@ def die(msg):
     sys.exit(1)
 
 
+def resolve(profile_name, where):
+    """A routing entry is a profile name. Return the model for the Claude path."""
+    profiles = CONFIG.get("profiles", {})
+    profile = profiles.get(profile_name)
+    if profile is None:
+        die(f"{where} references unknown profile {profile_name!r}")
+    if profile.get("adapter") != "claude":
+        die(f"{where} uses profile {profile_name!r} on adapter "
+            f"{profile.get('adapter')!r}; the Claude orchestrator can only run "
+            f"adapter 'claude' profiles")
+    model = profile.get("model")
+    if not isinstance(model, str) or not model.strip():
+        die(f"{where}: profile {profile_name!r} has no model")
+    return model
+
+
 def main(argv):
     if len(argv) != 1:
         die("usage: route <job-id>")
@@ -34,12 +55,14 @@ def main(argv):
     intake = job["intake"] or die(f"{job_id} has no intake.md")
     risk = CONFIG["routing"].get(intake["risk"]) or die(
         f"risk {intake['risk']!r} isn't in config.json routing ({', '.join(CONFIG['routing'])})")
-    reviewers = dict(risk)
+    reviewers = {role: resolve(profile, f"routing.{intake['risk']}")
+                 for role, profile in risk.items()}
     for surface in intake["surfaces"]:
         extra = CONFIG["surface_reviewers"].get(surface)
         if extra is None:
             die(f"surface {surface!r} isn't in config.json surface_reviewers ({', '.join(CONFIG['surface_reviewers'])})")
-        reviewers.update(extra)
+        for role, profile in extra.items():
+            reviewers[role] = resolve(profile, f"surface_reviewers.{surface}")
     agents = {"reviewers": reviewers}
     res = subprocess.run([job_bin, "agents", job_id, json.dumps(agents)], capture_output=True, text=True)
     if res.returncode != 0:

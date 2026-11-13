@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/factory/result.schema.json",
+  "title": "Factory invocation result",
+  "type": "object",
+  "required": ["schema", "invocation_id", "status", "adapter", "started_at", "ended_at", "artifacts"],
+  "properties": {
+    "schema": { "const": "factory.invocation.result/1" },
+    "invocation_id": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["completed", "failed", "blocked", "cancelled", "timed_out"] },
+    "exit_code": { "type": ["integer", "null"] },
+    "session_id": { "type": ["string", "null"] },
+    "adapter": { "type": "string" },
+    "harness_version": { "type": ["string", "null"] },
+    "provider": { "type": ["string", "null"] },
+    "model_requested": { "type": ["string", "null"] },
+    "model_observed": { "type": ["string", "null"] },
+    "started_at": { "type": "string", "minLength": 1 },
+    "ended_at": { "type": "string", "minLength": 1 },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^/" },
+          "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+          "role": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "commit": { "type": ["string", "null"] },
+    "usage": {
+      "type": ["object", "null"],
+      "properties": {
+        "input_tokens": { "type": ["number", "null"] },
+        "output_tokens": { "type": ["number", "null"] },
+        "cache_read_tokens": { "type": ["number", "null"] },
+        "cache_write_tokens": { "type": ["number", "null"] },
+        "cost_usd": { "type": ["number", "null"] },
+        "cost_kind": { "type": ["string", "null"] },
+        "currency": { "type": ["string", "null"] },
+        "pricing_source": { "type": ["string", "null"] },
+        "pricing_date": { "type": ["string", "null"] },
+        "calculation_version": { "type": ["string", "null"] }
+      }
+    },
+    "error": {
+      "type": ["object", "null"],
+      "required": ["message"],
+      "properties": { "message": { "type": "string", "minLength": 1 } }
+    },
+    "raw_event_log": { "type": ["string", "null"], "pattern": "^/" }
+  }
+}
