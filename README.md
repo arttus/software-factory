@@ -96,6 +96,11 @@ Run one job end to end:
 factory/bin/run --job 12 --role-set command-code
 ```
 
+In Command Code, the project skill at `.commandcode/skills/factory/SKILL.md`
+exposes the same controller as `/factory`: `/factory run` drains the queue,
+`/factory status` reports jobs, and feedback or rejection go through
+`factory/bin/job`. The skill delegates; it does not reimplement the pipeline.
+
 The orchestrator drives intake → spec → build → gate → review → approve through
 the real `factory/bin/job` and `factory/bin/gate` scripts. It validates each
 artifact, routes reviewers from risk and surfaces, waits for every review,

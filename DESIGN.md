@@ -153,7 +153,9 @@ until the compatibility adapter passes the same contract suite.
 risk/surface routing reference profiles. `factory/bin/route` resolves them back
 to Claude model aliases, so the old skill keeps working from one source of truth.
 Named `role_sets` select a whole backend (roles plus routing) without editing the
-default Claude tables.
+default Claude tables. The project skill at `.commandcode/skills/factory/SKILL.md`
+exposes the controller to Command Code as `/factory`; it delegates to
+`factory/bin/run` and never reimplements the pipeline.
 
 **Two real backends exist.** `factory/adapters/kilo.py` drives
 `kilo run --format json` with an isolated XDG config containing one generated

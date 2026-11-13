@@ -1,5 +1,6 @@
 /factory/jobs/
 /.worktrees/
+/.commandcode/taste/
 __pycache__/
 *.pyc
 .DS_Store

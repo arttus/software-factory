@@ -15,7 +15,10 @@ Stop and tell the user if any of these fail:
   who can push to it and manage its labels.
 - Its default branch (`gh repo view --json defaultBranchRef`) exists on
   `origin`.
-- `claude --version` is 2.1.257 or later (the intake agent runs on Fable).
+- For Claude Code: `claude --version` is 2.1.257 or later (the intake agent runs
+  on Fable). For Command Code: `cmd --version` works and you will run jobs with
+  `--role-set command-code`. The two skills use the same scripts; only the
+  orchestrator differs.
 - `python3 --version` is 3.10 or later. The scripts use only the standard
   library.
 - None of the files in step 1 already exist. If one does, show the user the
@@ -27,6 +30,7 @@ Copy these files to the same paths in the project, unchanged:
 
 ```
 .claude/skills/factory/SKILL.md
+.commandcode/skills/factory/SKILL.md
 .claude/agents/intake.md
 .claude/agents/spec-writer.md
 .claude/agents/builder.md
