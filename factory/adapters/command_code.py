@@ -57,6 +57,20 @@ _MAX_TURNS = "80"
 _DIFF_LIMIT = 80_000
 _TAIL = 40
 
+HEADER_HINTS = {
+    "intake": "DECISION: ACCEPT | NEEDS-INFO | REJECT\n"
+              "RISK: low | medium | high\n"
+              "SURFACES: ui, security | ui | security | none\n"
+              "RESCOPED: yes | no",
+    "reviewer-code": "VERDICT: PASS | CHANGES",
+    "reviewer-security": "VERDICT: PASS | CHANGES",
+    "reviewer-ux": "VERDICT: PASS | CHANGES",
+    "reviewer-ui": "VERDICT: PASS | CHANGES",
+    "approver": "APPROVE | ESCALATE",
+    "spec-writer": "SPEC: <short title>",
+    "builder": "STATUS: READY | STATUS: BLOCKED",
+}
+
 
 class CommandCodeAdapter(Adapter):
     name = "command-code"
@@ -184,11 +198,32 @@ class CommandCodeAdapter(Adapter):
                 f"with its required first line ({role.first_line}). No commentary, "
                 "no preamble, no closing remarks. Do not wrap the document in a code "
                 "fence unless the document itself needs one.\n"
+                "\nOUTPUT CONTRACT: the first non-empty line of your final response "
+                f"MUST match {role.first_line!r}. Every additional header line the "
+                "role template shows (for example RISK, SURFACES and RESCOPED for "
+                "intake) must appear exactly, one per line, before any prose. Do not "
+                "paraphrase, rename or omit header fields.\n"
             )
+            hint = HEADER_HINTS.get(role.name)
+            if hint:
+                message += (
+                    "\nBegin your response with exactly these lines, choosing the "
+                    "values, then a blank line and the rest of the document:\n\n"
+                    f"```\n{hint}\n```\n"
+                )
         else:
             message += ("\nCarry out your role instructions. Work in the worktree, "
                         "write the output file, commit, and push the job branch. "
                         "Never merge or deploy.\n")
+            hint = HEADER_HINTS.get(role.name)
+            if hint:
+                message += (
+                    f"\nThe output file `{output}` must begin with exactly "
+                    f"`{hint.split(' | ')[0]}` on its first line, before anything "
+                    f"else. Use `{hint.split(' | ')[-1]}` instead only when the "
+                    "task is genuinely blocked. Then write the rest of the document "
+                    "the role instructions describe.\n"
+                )
         change = self._change(request)
         if self._read_only(request):
             artifacts = self._artifacts(request)

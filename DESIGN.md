@@ -163,6 +163,15 @@ final response, while the builder is the only role that gets write tools. Both
 normalize events, record usage, enforce cancellation and validate the artifact's
 first line before returning a result.
 
+**The controller drives the loop.** `core/orchestrator.py` runs
+intake → spec → build → gate → review → approve → merge. It does not write
+`job.json`: every move goes through `factory/bin/job`, and every gate through
+`factory/bin/gate`. It validates intake's risk and surfaces before routing,
+runs reviewers concurrently and waits for all of them, keeps code failures on
+the round budget, ensures a draft PR exists after a READY build, and resumes a
+job from its recorded stage. `run --job` drives one job; `run --queue` drains
+the labeled queue.
+
 **Contracts are versioned and adapter-neutral.** `core/contracts.py` defines the
 request, result and event shapes. A result has a terminal status, observed
 model, artifacts with hashes, commit and nullable usage. `completed` means the

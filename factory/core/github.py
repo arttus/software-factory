@@ -20,6 +20,9 @@ class GitHub(Protocol):
     def comment(self, kind: str, number: int, body: str) -> None: ...
     def label(self, kind: str, number: int, *, add: str | None = None,
               remove: str | None = None) -> None: ...
+    def open_pr(self, head: str) -> dict | None: ...
+    def create_pr(self, head: str, base: str, title: str, body: str,
+                  *, draft: bool = True) -> dict: ...
     def pr_state(self, number: int) -> str: ...
     def merge_pr(self, number: int, method: str = "merge") -> None: ...
 
@@ -57,6 +60,20 @@ class GhCliGitHub:
     def pr_state(self, number: int) -> str:
         return json.loads(self._run("pr", "view", str(number), "--json", "state"))["state"]
 
+    def open_pr(self, head: str) -> dict | None:
+        raw = self._run("pr", "list", "--head", head, "--state", "open",
+                        "--json", "number,url")
+        prs = json.loads(raw)
+        return prs[0] if prs else None
+
+    def create_pr(self, head: str, base: str, title: str, body: str,
+                  *, draft: bool = True) -> dict:
+        args = ["pr", "create", "--base", base, "--head", head,
+                "--title", title, "--body", body]
+        if draft:
+            args.insert(2, "--draft")
+        return {"url": self._run(*args).strip()}
+
     def merge_pr(self, number: int, method: str = "merge") -> None:
         self._run("pr", "merge", str(number), f"--{method}")
 
@@ -70,6 +87,8 @@ class FakeGitHub:
         self.labels: list[tuple[str, int, str | None, str | None]] = []
         self.pr_states: dict[int, str] = {}
         self.merged: list[tuple[int, str]] = []
+        self.pulls: dict[int, dict] = {}
+        self.next_pr = 1
         self.operator = "factory-bot"
 
     def add_issue(self, number: int, **fields) -> dict:
@@ -95,6 +114,22 @@ class FakeGitHub:
 
     def pr_state(self, number: int) -> str:
         return self.pr_states.get(number, "OPEN")
+
+    def open_pr(self, head: str) -> dict | None:
+        for number, pr in self.pulls.items():
+            if pr["head"] == head and self.pr_state(number) == "OPEN":
+                return {"number": number, "url": pr["url"]}
+        return None
+
+    def create_pr(self, head: str, base: str, title: str, body: str,
+                  *, draft: bool = True) -> dict:
+        number = self.next_pr
+        self.next_pr += 1
+        pr = {"number": number, "url": f"https://example.test/pull/{number}",
+              "head": head, "base": base, "title": title, "body": body, "draft": draft}
+        self.pulls[number] = pr
+        self.pr_states[number] = "OPEN"
+        return pr
 
     def merge_pr(self, number: int, method: str = "merge") -> None:
         self.pr_states[number] = "MERGED"

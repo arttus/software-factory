@@ -72,13 +72,15 @@ place while the Claude skill stays the working entry point:
   instructions. No harness tool names, model aliases or hooks.
 - `factory/core/` holds versioned invocation/result/event contracts, profile and
   routing resolution, capability and permission checks, artifact promotion,
-  leases, a GitHub boundary and a controller skeleton.
+  leases, a GitHub boundary, the controller and the stage orchestrator.
 - `factory/adapters/` defines the adapter interface plus three backends: a
   deterministic fake harness, Kilo Code, and Command Code.
 - `factory/schemas/` documents config, invocation, result and event shapes.
 - `factory/bin/doctor` preflights config, profiles, roles and harness binaries.
-  `factory/bin/run --plan` resolves profiles and routing; `run --probe` prints
-  each adapter's capabilities; `run --smoke` drives one fake invocation.
+  `factory/bin/run` drives jobs: `--job <issue>` runs one job through every
+  stage, `--queue` drains the labeled queue, `--plan` resolves profiles,
+  `--probe` prints adapter capabilities and `--smoke` exercises the controller
+  with the fake adapter.
 - `factory/checks.sh` now runs the project's real Python checks and test suite.
 
 Execution profiles in `factory/config.json` (`schema_version: 2`) name an
@@ -88,13 +90,25 @@ resolves the Command Code profiles, while the default set keeps the Claude skill
 working from the same routing source. `factory/bin/route` resolves the default
 profiles back to Claude model aliases.
 
+Run one job end to end:
+
+```bash
+factory/bin/run --job 12 --role-set command-code
+```
+
+The orchestrator drives intake → spec → build → gate → review → approve through
+the real `factory/bin/job` and `factory/bin/gate` scripts. It validates each
+artifact, routes reviewers from risk and surfaces, waits for every review,
+ensures a draft PR exists after a READY build, and resumes from the recorded
+stage after a failure.
+
 The Kilo adapter is qualified for one real intake run. The Command Code adapter
-has completed a full local loop on a disposable calculator repo: intake, spec,
-builder (edit, test, commit, push), a passing gate, code review, and approval.
-Read-only roles run in Command Code's plan mode and the adapter writes their
-artifact from the final response; only the builder runs with tools. Codex and
-the Claude compatibility adapter come next; see
-[`docs/harness-agnostic-factory-spec.md`](docs/harness-agnostic-factory-spec.md).
+and the orchestrator have completed a full loop on a disposable calculator repo:
+intake, spec, builder (edit, test, commit, push), a passing gate, code review,
+approval, and merge, ending in `merged`. Read-only roles run in Command Code's
+plan mode and the adapter writes their artifact from the final response; only the
+builder runs with tools. Codex and the Claude compatibility adapter come next;
+see [`docs/harness-agnostic-factory-spec.md`](docs/harness-agnostic-factory-spec.md).
 
 ## The guide
 
@@ -135,9 +149,9 @@ factory/
   bin/gate                    runs checks.sh in a job's worktree → round-N/checks.md
   bin/route                   risk + surfaces → profiles → the job's reviewers
   bin/doctor                  preflight config, profiles, roles and harness binaries
-  bin/run                     controller entry point: --plan, --probe, --smoke, --role-set
+  bin/run                     drive jobs: --job, --queue, --plan, --probe, --smoke
   roles/                      portable role instructions (canonical)
-  core/                       contracts, config, capabilities, artifacts, leases, controller
+  core/                       contracts, config, capabilities, artifacts, leases, controller, orchestrator
   adapters/                   adapter interface, fake harness, Kilo and Command Code
   schemas/                    config, invocation, result and event schemas
   dashboard.html              the board
