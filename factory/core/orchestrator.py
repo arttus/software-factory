@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..adapters import Adapter, build_registry
+from . import browser as browser_evidence
 from .artifacts import canonical_path
 from .config import FactoryConfig, Profile
 from .contracts import Artifact, InvocationRequest, InvocationResult, new_invocation_id, sha256_file, utc_now
@@ -43,6 +44,10 @@ TERMINAL = {"merged", "rejected", "needs-info", "needs-human"}
 
 class OrchestratorError(RuntimeError):
     """A stage could not be completed; the job remains resumable."""
+
+
+class AwaitingHuman(Exception):
+    """The job reached a human approval point and stopped cleanly."""
 
 
 @dataclass
@@ -114,6 +119,7 @@ class Orchestrator:
     controller: Controller = field(init=False)
     log: Callable[[str], None] = print
     github: GitHub = field(default_factory=GhCliGitHub)
+    allow_merge: bool = False
 
     def __post_init__(self):
         self.roles = load_roles(self.factory_root)
@@ -156,13 +162,15 @@ class Orchestrator:
         return artifacts
 
     def build_request(self, job: dict, role: str, *, reviewers: dict[str, Profile] | None = None,
-                      browser: dict | None = None) -> InvocationRequest:
+                      browser: dict | None = None,
+                      extra_inputs: list[Artifact] | None = None) -> InvocationRequest:
         profile = self._profile(role, reviewers)
         instruction = self._role(role)
         job_dir = self.factory_root / "factory" / "jobs" / job["id"]
         output = canonical_path(job_dir, instruction, job["round"])
         # Intake runs before the worktree exists.
         worktree = None if role == "intake" else job.get("worktree")
+        inputs = self._inputs(job_dir, exclude=output) + list(extra_inputs or [])
         return InvocationRequest(
             invocation_id=new_invocation_id(),
             job_id=job["id"],
@@ -177,7 +185,7 @@ class Orchestrator:
             base_branch=self.config.base_branch,
             instruction_path=f"factory/roles/{instruction.name}.md",
             instruction_digest=instruction.digest,
-            inputs=self._inputs(job_dir, exclude=output),
+            inputs=inputs,
             outputs=[output.relative_to(job_dir).as_posix()],
             profile=profile.name,
             adapter=profile.adapter,
@@ -192,8 +200,10 @@ class Orchestrator:
         )
 
     def _run_role(self, job: dict, role: str, *,
-                  reviewers: dict[str, Profile] | None = None) -> InvocationResult:
-        request = self.build_request(job, role, reviewers=reviewers)
+                  reviewers: dict[str, Profile] | None = None,
+                  extra_inputs: list[Artifact] | None = None) -> InvocationResult:
+        request = self.build_request(job, role, reviewers=reviewers,
+                                     extra_inputs=extra_inputs)
         self.log(f"{job['id']}: {job['stage']} -> {role} ({request.profile} "
                  f"{request.adapter}:{request.model})")
         result = self.controller.run(request)
@@ -217,9 +227,11 @@ class Orchestrator:
         }
         self.state.agents(job["id"], agents)
 
-    def _run_reviewers(self, job: dict, reviewers: dict[str, Profile]) -> None:
+    def _run_reviewers(self, job: dict, reviewers: dict[str, Profile],
+                       extra_inputs: list[Artifact] | None = None) -> None:
         with ThreadPoolExecutor(max_workers=max(1, len(reviewers))) as pool:
-            futures = {pool.submit(self._run_role, job, role, reviewers=reviewers): role
+            futures = {pool.submit(self._run_role, job, role, reviewers=reviewers,
+                                   extra_inputs=extra_inputs): role
                        for role in reviewers}
             errors = []
             for future in as_completed(futures):
@@ -301,9 +313,31 @@ class Orchestrator:
         else:
             self.state.advance(job["id"], "build")
 
+    def _browser_port(self, job: dict) -> int:
+        ports = self.config.raw.get("ports", {})
+        base = int(ports.get("base", 5100))
+        step = int(ports.get("step", 10))
+        number = int(job["id"][:3]) if job["id"][:3].isdigit() else 1
+        return base + step * number + 9
+
+    def _browser_evidence(self, job: dict) -> list[Artifact]:
+        surfaces = (job.get("intake") or {}).get("surfaces") or []
+        if "ui" not in surfaces:
+            return []
+        settings = browser_evidence.settings_from(self.config.browser)
+        if not settings.configured():
+            raise OrchestratorError(
+                f"{job['id']}: UI review needs browser evidence but "
+                "config.browser.start_command and config.browser.url are not set")
+        job_dir = self.factory_root / "factory" / "jobs" / job["id"]
+        return browser_evidence.capture(
+            job_dir=job_dir, worktree=job["worktree"], job=job, settings=settings,
+            port=self._browser_port(job), log=self.log)
+
     def _stage_review(self, job: dict) -> None:
         reviewers = self.reviewers_for(job)
-        self._run_reviewers(job, reviewers)
+        evidence = self._browser_evidence(job)
+        self._run_reviewers(job, reviewers, extra_inputs=evidence)
         self.state.sync(job["id"])
         job = self._job_json(job["id"])
         verdicts = job.get("reviews") or {}
@@ -322,10 +356,17 @@ class Orchestrator:
 
     def _stage_approve(self, job: dict) -> None:
         self._run_role(job, "approver")
-        decision = (self.factory_root / "factory" / "jobs" / job["id"] / "decision.md")
+        decision = self.factory_root / "factory" / "jobs" / job["id"] / "decision.md"
         first = decision.read_text().split("\n", 1)[0].strip()
         if first == "APPROVE":
-            self.state.merge(job["id"])
+            if self.allow_merge:
+                self.state.merge(job["id"])
+                return
+            if job.get("pr"):
+                self.github.ready_pr(job["pr"])
+            raise AwaitingHuman(
+                f"{job['id']}: PR #{job.get('pr')} is ready; merge it to approve "
+                f"(or rerun with --merge to let the approver merge)")
         elif first == "ESCALATE":
             self.state.advance(job["id"], "needs-human")
         else:
@@ -346,7 +387,11 @@ class Orchestrator:
             handler = getattr(self, f"_stage_{stage}", None)
             if handler is None:
                 raise OrchestratorError(f"{job_id}: no handler for stage {stage!r}")
-            handler(job)
+            try:
+                handler(job)
+            except AwaitingHuman as stop:
+                self.log(str(stop))
+                return job
             updated = self._job_json(job_id)
             if updated["stage"] == stage and stage not in TERMINAL:
                 raise OrchestratorError(f"{job_id}: stage {stage} did not advance")
@@ -392,7 +437,8 @@ class Orchestrator:
 def build_orchestrator(factory_root: str | Path, config: FactoryConfig,
                        adapters: dict[str, Adapter] | None = None,
                        state: JobState | None = None,
-                       log: Callable[[str], None] = print) -> Orchestrator:
+                       log: Callable[[str], None] = print,
+                       allow_merge: bool = False) -> Orchestrator:
     root = Path(factory_root)
     return Orchestrator(
         factory_root=root,
@@ -400,4 +446,5 @@ def build_orchestrator(factory_root: str | Path, config: FactoryConfig,
         adapters=adapters if adapters is not None else build_registry(root),
         state=state or JobState(root),
         log=log,
+        allow_merge=allow_merge,
     )

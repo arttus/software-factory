@@ -12,6 +12,7 @@ Options:
   --root <path>         factory checkout to operate on (default: this one)
   --config <path>       config file (default: <root>/factory/config.json)
   --role-set <name>     select a named role set (e.g. command-code)
+  --merge               let the approver merge; default stops at a ready PR
 
 The controller writes invocation evidence under
 factory/jobs/<job-id>/runs/<invocation-id>/ and advances stages only through
@@ -115,10 +116,11 @@ def smoke(config_path: str, role_set: str | None) -> int:
 
 
 def orchestrate(config_path: str, role_set: str | None, root: str,
-                job: str | None, queue: bool) -> int:
+                job: str | None, queue: bool, merge: bool) -> int:
     factory_root = Path(root).resolve()
     config = load_config(config_path, role_set=role_set)
-    orchestrator = build_orchestrator(factory_root, config)
+    allow_merge = merge or config.merge_policy == "auto"
+    orchestrator = build_orchestrator(factory_root, config, allow_merge=allow_merge)
     if queue:
         rows = orchestrator.run_queue()
         for row in rows:
@@ -143,6 +145,8 @@ def main(argv: list[str]) -> int:
     group.add_argument("--smoke", action="store_true")
     group.add_argument("--queue", action="store_true")
     group.add_argument("--job", default=None)
+    parser.add_argument("--merge", action="store_true",
+                        help="let the approver merge; otherwise stop at a ready PR")
     args = parser.parse_args(argv)
 
     config_path = args.config or str(Path(args.root).resolve() / "factory" / "config.json")
@@ -153,7 +157,8 @@ def main(argv: list[str]) -> int:
     if args.smoke:
         return smoke(config_path, args.role_set)
     if args.queue or args.job:
-        return orchestrate(config_path, args.role_set, args.root, args.job, args.queue)
+        return orchestrate(config_path, args.role_set, args.root, args.job,
+                           args.queue, args.merge)
     parser.print_help()
     return 2
 

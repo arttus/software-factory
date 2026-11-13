@@ -70,6 +70,13 @@ It must be non-interactive, must not rewrite files (no `--fix`, no
 - `base_branch`: the default branch.
 - `merge_method`: `merge`, `squash` or `rebase`, one the repo allows
   (`gh api repos/{owner}/{repo} --jq '{allow_merge_commit, allow_squash_merge, allow_rebase_merge}'`).
+- `merge_policy`: leave `human` unless the user asks the approver to merge.
+- `browser`: for a project with a UI, set `start_command` to the dev-server
+  argv with `{port}` and `url` to the page URL with `{port}`, for example
+  `["npm", "run", "dev", "--", "--port", "{port}"]` and
+  `"http://127.0.0.1:{port}/"`. Install `agent-browser` with
+  `npm i -g agent-browser && agent-browser install`. Leave both null for a
+  project with no UI; UI-routed jobs will then block with a clear reason.
 - `protected_paths`: keep the two factory entries and don't add the project's
   tests. Features legitimately change existing tests (a new required field
   changes every fixture), and a protected test blocks the job with no way

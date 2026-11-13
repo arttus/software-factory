@@ -29,6 +29,7 @@ from factory.core.capabilities import (  # noqa: E402
     check_permission_profile,
     role_for_profile,
 )
+from factory.core.browser import BrowserError, available, settings_from  # noqa: E402
 from factory.core.config import ConfigError, FactoryConfig, load_config  # noqa: E402
 from factory.core.roles import RoleError, load_roles  # noqa: E402
 
@@ -93,6 +94,24 @@ def report(config: FactoryConfig, roles) -> dict:
     if "has no checks yet" in checks_text:
         warnings.append("factory/checks.sh is still the placeholder; fix it before running jobs")
 
+    try:
+        browser_settings = settings_from(config.browser)
+    except BrowserError as exc:
+        errors.append(str(exc))
+        browser_settings = None
+    browser = {"command": None, "configured": False, "available": False}
+    if browser_settings is not None:
+        browser = {
+            "command": browser_settings.command,
+            "configured": browser_settings.configured(),
+            "available": available(browser_settings),
+            "url": browser_settings.url,
+        }
+        if browser_settings.configured() and not browser["available"]:
+            errors.append(f"browser command {browser_settings.command!r} is not installed")
+        if not browser_settings.configured():
+            warnings.append("browser.start_command/url are not set; UI-routed jobs will block")
+
     return {
         "config": str(config.path),
         "schema_version": config.schema_version,
@@ -105,6 +124,7 @@ def report(config: FactoryConfig, roles) -> dict:
         "routing": {risk: dict(entry) for risk, entry in config.routing.items()},
         "surface_reviewers": {s: dict(entry) for s, entry in config.surface_reviewers.items()},
         "limits": config.limits,
+        "browser": browser,
         "probes": {name: {"version": report.version, "capabilities": report.capabilities}
                    for name, report in probes.items()},
         "errors": errors,
@@ -138,6 +158,10 @@ def main(argv: list[str]) -> int:
             version = f" {adapter['version']}" if adapter["version"] else ""
             print(f"  adapter {adapter['name']}: {state}, {found}{version}")
         print(f"roles: {', '.join(data['role_files'])}")
+        browser = data["browser"]
+        state = ("configured" if browser["configured"] else "not configured")
+        found = ("found" if browser["available"] else "missing")
+        print(f"browser: {browser['command']} ({state}, {found})")
         for name, probe in data["probes"].items():
             print(f"  controller probe {name}: {probe['version'] or 'unknown version'}")
         for warning in data["warnings"]:

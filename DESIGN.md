@@ -172,6 +172,17 @@ the round budget, ensures a draft PR exists after a READY build, and resumes a
 job from its recorded stage. `run --job` drives one job; `run --queue` drains
 the labeled queue.
 
+**Browser evidence is controller-owned.** When intake flags the `ui` surface,
+the controller starts the app from `config.browser.start_command`, captures
+each configured viewport with `agent-browser`, and hands the screenshots and
+accessibility snapshots to the UX/UI reviewers. Workers stay read-only: they
+never get shell just to look at a page. Missing browser configuration or a
+missing binary blocks the UI review instead of producing an unverified PASS.
+
+**Merging respects `merge_policy`.** `human` (the default) marks the PR ready
+and stops after an APPROVE; `auto` lets the controller merge. The first real
+repository run therefore stops at a reviewable PR.
+
 **Contracts are versioned and adapter-neutral.** `core/contracts.py` defines the
 request, result and event shapes. A result has a terminal status, observed
 model, artifacts with hashes, commit and nullable usage. `completed` means the

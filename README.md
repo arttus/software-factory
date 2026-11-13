@@ -102,12 +102,25 @@ artifact, routes reviewers from risk and surfaces, waits for every review,
 ensures a draft PR exists after a READY build, and resumes from the recorded
 stage after a failure.
 
+Merging follows `merge_policy`. It defaults to `human`: after an APPROVE the
+controller marks the PR ready and stops so you can merge it. Pass `--merge`
+(or set `merge_policy: "auto"`) to let the approver merge.
+
+UI-routed jobs get controller-provided browser evidence. The controller starts
+the app from `config.browser.start_command`, captures each configured viewport
+with [`agent-browser`](https://www.npmjs.com/package/agent-browser), and hands
+the screenshots and accessibility snapshots to the UX/UI reviewers, who stay
+read-only. Set `browser.start_command` and `browser.url` in `config.json` for a
+web project; without them a UI job blocks with a specific reason instead of
+producing an unverified PASS.
+
 The Kilo adapter is qualified for one real intake run. The Command Code adapter
 and the orchestrator have completed a full loop on a disposable calculator repo:
 intake, spec, builder (edit, test, commit, push), a passing gate, code review,
 approval, and merge, ending in `merged`. Read-only roles run in Command Code's
 plan mode and the adapter writes their artifact from the final response; only the
-builder runs with tools. Codex and the Claude compatibility adapter come next;
+builder runs with tools. Browser capture was verified against a local page at
+desktop and phone widths. Codex and the Claude compatibility adapter come next;
 see [`docs/harness-agnostic-factory-spec.md`](docs/harness-agnostic-factory-spec.md).
 
 ## The guide

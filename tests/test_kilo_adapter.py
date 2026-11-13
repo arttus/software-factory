@@ -112,7 +112,10 @@ class KiloAdapterTests(unittest.TestCase):
         report = self.adapter.probe()
         self.assertEqual(report.version, "kilo 9.9.9")
         self.assertEqual(report.enforcement("machine_readable_events"), "native")
-        self.assertEqual(report.enforcement("browser_tooling"), "none")
+        self.assertIn(report.enforcement("browser_tooling"), ("none", "external"))
+        self.assertEqual(KiloAdapter(self.root, executable=str(self.script),
+                                     browser_available=False).probe()
+                         .enforcement("browser_tooling"), "none")
 
     def test_run_normalizes_events_and_artifact(self):
         request = self.request()

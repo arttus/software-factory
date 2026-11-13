@@ -98,11 +98,17 @@ class CommandCodeAdapterTests(unittest.TestCase):
         os.environ["FAKE_LOG"] = str(log)
         return log
 
-    def test_probe_reports_version_and_no_browser(self):
+    def test_probe_reports_version_and_browser_capability(self):
         report = self.adapter.probe()
         self.assertEqual(report.version, "1.53.1")
         self.assertEqual(report.enforcement("machine_readable_events"), "native")
-        self.assertEqual(report.enforcement("browser_tooling"), "none")
+        self.assertIn(report.enforcement("browser_tooling"), ("none", "external"))
+        self.assertEqual(CommandCodeAdapter(self.root, executable=str(self.script),
+                                            browser_available=False).probe()
+                         .enforcement("browser_tooling"), "none")
+        self.assertEqual(CommandCodeAdapter(self.root, executable=str(self.script),
+                                            browser_available=True).probe()
+                         .enforcement("browser_tooling"), "external")
 
     def test_read_only_role_writes_artifact_from_final_text(self):
         request = self.request()

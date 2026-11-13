@@ -16,7 +16,9 @@ execution profiles, capability and permission validation, a deterministic fake
 adapter, a GitHub boundary, a stage orchestrator and a test suite. Kilo Code and
 Command Code adapters are implemented, and a Command Code run completed a full
 job through the real `job`/`gate` state machine on a disposable fixture: intake,
-spec, build, gate, review, approval and merge. The Claude skill and agents are
-still the working entry point; Codex and the Claude compatibility adapter are
-the next migration step. See
+spec, build, gate, review, approval and merge. Controller-provided browser
+evidence (screenshots and accessibility snapshots via `agent-browser`) was
+verified at desktop and phone widths, and `merge_policy` defaults to human
+approval. The Claude skill and agents are still the working entry point; Codex
+and the Claude compatibility adapter are the next migration step. See
 [`docs/harness-agnostic-factory-spec.md`](docs/harness-agnostic-factory-spec.md).

@@ -3,9 +3,11 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from factory.core import orchestrator as orchestrator_module
 from factory.core.config import load_config
-from factory.core.contracts import InvocationResult, utc_now
+from factory.core.contracts import Artifact, InvocationResult, utc_now
 from factory.core.github import FakeGitHub
 from factory.core.orchestrator import Orchestrator
 
@@ -96,7 +98,7 @@ class FakeState:
 
 
 class TestOrchestrator(Orchestrator):
-    def _run_role(self, job, role, *, reviewers=None):
+    def _run_role(self, job, role, *, reviewers=None, extra_inputs=None):
         self.log(f"role {role}")
         job_dir = self.factory_root / "factory" / "jobs" / job["id"]
         bodies = {
@@ -135,7 +137,8 @@ class OrchestratorTests(unittest.TestCase):
         self.github = FakeGitHub()
         self.orchestrator = TestOrchestrator(
             factory_root=self.root, config=self.config, adapters={},
-            state=self.state, log=lambda _: None, github=self.github)
+            state=self.state, log=lambda _: None, github=self.github,
+            allow_merge=True)
 
     def test_full_job_flow(self):
         final = self.orchestrator.run_job("001-demo")
@@ -177,6 +180,48 @@ class OrchestratorTests(unittest.TestCase):
         reviewers = self.orchestrator.reviewers_for(self.job)
         request = self.orchestrator.build_request(self.job, "code", reviewers=reviewers)
         self.assertEqual(request.outputs, ["round-2/review-code.md"])
+
+    def test_extra_inputs_reach_the_request(self):
+        artifact = Artifact(path=str(self.root / "shot.png"), sha256="a" * 64)
+        request = self.orchestrator.build_request(self.job, "intake",
+                                                  extra_inputs=[artifact])
+        self.assertIn(artifact, request.inputs)
+
+    def test_ui_review_captures_browser_evidence(self):
+        self.orchestrator.config.browser = {
+            "command": "agent-browser",
+            "start_command": ["true", "{port}"],
+            "url": "http://127.0.0.1:{port}/",
+            "viewports": [{"name": "desktop", "width": 1440, "height": 900}],
+        }
+        self.job.update({"stage": "review", "round": 1,
+                         "intake": {"risk": "low", "surfaces": ["ui"]},
+                         "agents": {"reviewers": {"code": "cc-code-haiku",
+                                                  "ux": "cc-ux-sonnet",
+                                                  "ui": "cc-ui-haiku"}}})
+        rd = self.root / "factory" / "jobs" / "001-demo" / "round-1"
+        rd.mkdir(parents=True)
+        (rd / "checks.md").write_text("GATE: PASS\nCOMMIT: abc\n")
+        evidence = Artifact(path=str(rd / "browser" / "desktop.png"), sha256="a" * 64)
+        with mock.patch.object(orchestrator_module.browser_evidence, "capture",
+                               return_value=[evidence]) as captured:
+            self.orchestrator._stage_review(self.job)
+        captured.assert_called_once()
+        self.assertEqual(self.job["stage"], "approve")
+
+    def test_ui_review_without_browser_config_is_refused(self):
+        self.job.update({"stage": "review", "round": 1,
+                         "intake": {"risk": "low", "surfaces": ["ui"]}})
+        with self.assertRaises(Exception):
+            self.orchestrator._stage_review(self.job)
+
+    def test_human_merge_stops_at_a_ready_pr(self):
+        self.orchestrator.allow_merge = False
+        self.job["pr"] = 7
+        final = self.orchestrator.run_job("001-demo")
+        self.assertEqual(final["stage"], "approve")
+        self.assertEqual(self.github.ready, [7])
+        self.assertEqual(self.github.merged, [])
 
 
 if __name__ == "__main__":

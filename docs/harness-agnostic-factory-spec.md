@@ -4,7 +4,8 @@ Status: foundation and controller orchestration implemented; portable roles,
 contracts, profiles, capabilities, fake adapter, GitHub boundary and
 deterministic tests in place; Kilo and Command Code adapters implemented and
 qualified; a full job ran end to end through the real state machine and gate;
-Codex and Claude compatibility adapters pending  
+controller-provided browser evidence implemented and verified; Codex and
+Claude compatibility adapters pending  
 Date: 2026-11-13  
 Baseline: standalone import commit `5d5fed8`  
 Primary initial backends: Kilo Code with OpenRouter, then Codex CLI  

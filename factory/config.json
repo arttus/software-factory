@@ -272,6 +272,16 @@
       "fake": 4
     }
   },
+  "browser": {
+    "command": "agent-browser",
+    "start_command": null,
+    "url": null,
+    "ready_timeout_seconds": 60,
+    "viewports": [
+      { "name": "desktop", "width": 1440, "height": 900 },
+      { "name": "mobile", "width": 390, "height": 844 }
+    ]
+  },
   "protected_paths": [
     "factory/checks.sh",
     "factory/config.json"

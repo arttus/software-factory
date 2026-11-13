@@ -23,6 +23,7 @@ class GitHub(Protocol):
     def open_pr(self, head: str) -> dict | None: ...
     def create_pr(self, head: str, base: str, title: str, body: str,
                   *, draft: bool = True) -> dict: ...
+    def ready_pr(self, number: int) -> None: ...
     def pr_state(self, number: int) -> str: ...
     def merge_pr(self, number: int, method: str = "merge") -> None: ...
 
@@ -74,6 +75,9 @@ class GhCliGitHub:
             args.insert(2, "--draft")
         return {"url": self._run(*args).strip()}
 
+    def ready_pr(self, number: int) -> None:
+        self._run("pr", "ready", str(number))
+
     def merge_pr(self, number: int, method: str = "merge") -> None:
         self._run("pr", "merge", str(number), f"--{method}")
 
@@ -89,6 +93,7 @@ class FakeGitHub:
         self.merged: list[tuple[int, str]] = []
         self.pulls: dict[int, dict] = {}
         self.next_pr = 1
+        self.ready: list[int] = []
         self.operator = "factory-bot"
 
     def add_issue(self, number: int, **fields) -> dict:
@@ -130,6 +135,9 @@ class FakeGitHub:
         self.pulls[number] = pr
         self.pr_states[number] = "OPEN"
         return pr
+
+    def ready_pr(self, number: int) -> None:
+        self.ready.append(number)
 
     def merge_pr(self, number: int, method: str = "merge") -> None:
         self.pr_states[number] = "MERGED"

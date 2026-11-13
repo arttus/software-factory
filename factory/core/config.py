@@ -74,6 +74,7 @@ class FactoryConfig:
     limits: dict
     merge_policy: str
     role_set: str
+    browser: dict = field(default_factory=dict)
     protected_paths: list[str] = field(default_factory=list)
 
     def profile(self, name: str) -> Profile:
@@ -167,12 +168,21 @@ def build_config(raw: dict, path: str | Path = Path("config.json"),
     _require(isinstance(protected, list) and all(isinstance(p, str) for p in protected),
              "protected_paths must be a list of strings")
 
+    browser = raw.get("browser", {})
+    _require(isinstance(browser, dict), "browser must be an object")
+    from .browser import BrowserError, settings_from
+    try:
+        settings_from(browser)
+    except BrowserError as exc:
+        raise ConfigError(str(exc)) from None
+
     return FactoryConfig(
         path=Path(path), raw=raw, schema_version=SCHEMA_VERSION,
         base_branch=base_branch, labels=labels, adapters=adapters,
         permission_profiles=permission_profiles, profiles=profiles, roles=roles,
         routing=routing, surface_reviewers=surface_reviewers, limits=limits,
-        merge_policy=merge_policy, role_set=selected, protected_paths=protected,
+        merge_policy=merge_policy, role_set=selected, browser=browser,
+        protected_paths=protected,
     )
 
 
