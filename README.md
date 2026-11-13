@@ -24,6 +24,16 @@ GitHub labels, and checks that `checks.sh` passes on `main`.
 You need Claude Code 2.1.257 or later, `python3`, and an authenticated
 [`gh`](https://cli.github.com/) that can push to the repo.
 
+## Verify the install
+
+Run these three checks to confirm the factory is ready:
+
+- `factory/bin/doctor` — proves the schema-versioned config, every referenced profile and adapter, the portable role files, permission profiles and enabled harness binaries are all present and valid.
+- `factory/bin/run --plan` — proves execution profiles and reviewer routing resolve from `factory/config.json` without launching any work.
+- `factory/bin/run --smoke` — proves the controller can drive one builder invocation end to end and write its evidence artifact.
+
+`factory/bin/run --smoke` uses the fake adapter and calls no model, so it is safe to run before any real credentials or harnesses are set up.
+
 ## The loop
 
 ```
