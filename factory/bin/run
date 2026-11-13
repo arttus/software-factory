@@ -3,6 +3,7 @@
 
 Usage:
   run --plan            resolve profiles and routing without launching work
+  run --probe           probe registered adapters and print their capabilities
   run --smoke           run one fake-builder invocation through the controller
   run <issue>           explain what still has to land before jobs run here
 
@@ -12,6 +13,7 @@ factory/jobs/<job-id>/runs/<invocation-id>/ and never advances a job stage.
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import tempfile
@@ -20,6 +22,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
+from factory.adapters import build_registry  # noqa: E402
 from factory.adapters.fake import FakeAdapter  # noqa: E402
 from factory.core.config import ConfigError, load_config  # noqa: E402
 from factory.core.controller import Controller, ControllerError  # noqa: E402
@@ -29,11 +32,12 @@ from factory.core.roles import RoleError, load_roles  # noqa: E402
 CONFIG_PATH = REPO / "factory" / "config.json"
 
 
-def plan() -> int:
-    config = load_config(CONFIG_PATH)
+def plan(config_path: str, role_set: str | None) -> int:
+    config = load_config(config_path, role_set=role_set)
     roles = load_roles(REPO)
-    print(f"schema {config.schema_version}: {len(config.profiles)} profiles, "
-          f"{len(config.adapters)} adapters, {len(roles)} roles")
+    print(f"role set {config.role_set}: schema {config.schema_version}, "
+          f"{len(config.profiles)} profiles, {len(config.adapters)} adapters, "
+          f"{len(roles)} roles")
     for role in ("intake", "spec", "builder", "approver"):
         profile = config.role_profile(role)
         print(f"  {role:<8} → {profile.name} ({profile.adapter}:{profile.model}, "
@@ -48,8 +52,24 @@ def plan() -> int:
     return 0
 
 
-def smoke() -> int:
-    config = load_config(CONFIG_PATH)
+def probe(config_path: str, role_set: str | None) -> int:
+    config = load_config(config_path, role_set=role_set)
+    load_roles(REPO)
+    registry = build_registry(REPO)
+    for name in sorted(registry):
+        report = registry[name].probe()
+        print(f"{name}: {report.version or 'unknown version'}")
+        for capability in sorted(report.capabilities):
+            print(f"  {capability}: {report.capabilities[capability]}")
+        print()
+    for name in sorted(config.enabled_adapters()):
+        if name not in registry:
+            print(f"{name}: enabled in config but no controller adapter is available")
+    return 0
+
+
+def smoke(config_path: str, role_set: str | None) -> int:
+    config = load_config(config_path, role_set=role_set)
     roles = load_roles(REPO)
     with tempfile.TemporaryDirectory(prefix="factory-smoke-") as tmp:
         root = Path(tmp)
@@ -87,15 +107,27 @@ def smoke() -> int:
 
 
 def main(argv: list[str]) -> int:
-    if argv == ["--plan"]:
-        return plan()
-    if argv == ["--smoke"]:
-        return smoke()
-    if len(argv) == 1 and argv[0].isdigit():
+    parser = argparse.ArgumentParser(description="Factory controller entry point.")
+    parser.add_argument("--config", default=str(CONFIG_PATH))
+    parser.add_argument("--role-set", default=None)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--plan", action="store_true")
+    group.add_argument("--probe", action="store_true")
+    group.add_argument("--smoke", action="store_true")
+    parser.add_argument("issue", nargs="?")
+    args = parser.parse_args(argv)
+
+    if args.plan:
+        return plan(args.config, args.role_set)
+    if args.probe:
+        return probe(args.config, args.role_set)
+    if args.smoke:
+        return smoke(args.config, args.role_set)
+    if args.issue and args.issue.isdigit():
         print("run: controller execution for real issues is not enabled in this build. "
               "Use /factory run in Claude Code, or run --smoke to exercise the adapter contract.")
         return 2
-    print(__doc__.strip(), file=sys.stderr)
+    parser.print_help()
     return 2
 
 

@@ -13,6 +13,7 @@ writes job state.
 
 from __future__ import annotations
 
+import argparse
 import json
 import shutil
 import subprocess
@@ -22,7 +23,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
+from factory.adapters import build_registry  # noqa: E402
 from factory.core.capabilities import (  # noqa: E402
+    check_capabilities,
     check_permission_profile,
     role_for_profile,
 )
@@ -65,15 +68,26 @@ def report(config: FactoryConfig, roles) -> dict:
         })
 
     used = config.profile_names_in_use()
+    registry = build_registry(REPO)
+    probes: dict[str, object] = {}
     for name in sorted(used):
         profile = config.profile(name)
         permission = config.permission(profile.permission_profile)
         role = role_for_profile(config, profile)
         if role:
             errors.extend(check_permission_profile(role, permission))
-        if profile.adapter not in ("fake",):
-            warnings.append(f"profile {name!r}: Python adapter {profile.adapter!r} is not "
-                            f"implemented yet; the legacy skill path covers it")
+        adapter = registry.get(profile.adapter)
+        if adapter is None:
+            warnings.append(f"profile {name!r}: adapter {profile.adapter!r} is not available "
+                            f"to the controller (pending implementation or missing executable)")
+            continue
+        if profile.adapter not in probes:
+            probes[profile.adapter] = adapter.probe()
+        report = probes[profile.adapter]
+        if role:
+            errors.extend(f"profile {name!r}: {problem}" for problem in
+                          check_capabilities(role, report,
+                                             browser=role in ("ux", "ui")))
 
     checks_text = CHECKS.read_text() if CHECKS.exists() else ""
     if "has no checks yet" in checks_text:
@@ -83,6 +97,7 @@ def report(config: FactoryConfig, roles) -> dict:
         "config": str(config.path),
         "schema_version": config.schema_version,
         "base_branch": config.base_branch,
+        "role_set": config.role_set,
         "merge_policy": config.merge_policy,
         "adapters": adapters,
         "roles": sorted(config.roles),
@@ -90,34 +105,41 @@ def report(config: FactoryConfig, roles) -> dict:
         "routing": {risk: dict(entry) for risk, entry in config.routing.items()},
         "surface_reviewers": {s: dict(entry) for s, entry in config.surface_reviewers.items()},
         "limits": config.limits,
+        "probes": {name: {"version": report.version, "capabilities": report.capabilities}
+                   for name, report in probes.items()},
         "errors": errors,
         "warnings": warnings,
     }
 
 
 def main(argv: list[str]) -> int:
-    if argv not in ([], ["--json"]):
-        print(__doc__.strip(), file=sys.stderr)
-        return 2
+    parser = argparse.ArgumentParser(description="Preflight the factory without model work.")
+    parser.add_argument("--config", default=str(CONFIG_PATH))
+    parser.add_argument("--role-set", default=None)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
     try:
-        config = load_config(CONFIG_PATH)
+        config = load_config(args.config, role_set=args.role_set)
         roles = load_roles(REPO)
     except (ConfigError, RoleError, OSError, json.JSONDecodeError) as exc:
         print(f"doctor: {exc}", file=sys.stderr)
         return 1
 
     data = report(config, roles)
-    if argv == ["--json"]:
+    if args.json:
         print(json.dumps(data, indent=2))
     else:
         print(f"config {data['config']} (schema {data['schema_version']})")
-        print(f"base {data['base_branch']}, merge policy {data['merge_policy']}")
+        print(f"role set {data['role_set']}, base {data['base_branch']}, "
+              f"merge policy {data['merge_policy']}")
         for adapter in data["adapters"]:
             state = "enabled" if adapter["enabled"] else "disabled"
             found = "found" if adapter["found"] else "MISSING"
             version = f" {adapter['version']}" if adapter["version"] else ""
             print(f"  adapter {adapter['name']}: {state}, {found}{version}")
         print(f"roles: {', '.join(data['role_files'])}")
+        for name, probe in data["probes"].items():
+            print(f"  controller probe {name}: {probe['version'] or 'unknown version'}")
         for warning in data["warnings"]:
             print(f"warning: {warning}")
         for error in data["errors"]:

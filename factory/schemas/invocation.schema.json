@@ -19,6 +19,7 @@
     "job_dir": { "type": "string", "pattern": "^/" },
     "worktree": { "type": ["string", "null"], "pattern": "^/" },
     "branch": { "type": ["string", "null"] },
+    "base_branch": { "type": ["string", "null"] },
     "input_commit": { "type": ["string", "null"] },
     "instruction_path": { "type": "string", "pattern": "^[^/]" },
     "instruction_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
@@ -42,6 +43,15 @@
     "reasoning": { "type": "object" },
     "required_capabilities": { "type": "array", "items": { "type": "string" } },
     "permission_profile": { "type": "string" },
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "shell": { "type": "boolean" },
+        "network": { "type": "boolean" },
+        "write_scope": { "enum": ["output_only", "worktree_and_output", "worktree_only"] }
+      },
+      "additionalProperties": false
+    },
     "deadline_seconds": { "type": ["integer", "null"], "minimum": 0 },
     "cancel_grace_seconds": { "type": "integer", "minimum": 0 },
     "browser": { "type": ["object", "null"] },

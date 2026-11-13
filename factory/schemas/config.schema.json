@@ -84,6 +84,15 @@
         "additionalProperties": { "type": "string" }
       }
     },
+    "default_role_set": { "type": "string" },
+    "role_sets": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["roles", "routing", "surface_reviewers"],
+        "additionalProperties": false
+      }
+    },
     "limits": {
       "type": "object",
       "required": ["jobs", "workers"],

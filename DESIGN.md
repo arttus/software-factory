@@ -152,6 +152,16 @@ until the compatibility adapter passes the same contract suite.
 2. A profile names an adapter, model selector and permission profile; roles and
 risk/surface routing reference profiles. `factory/bin/route` resolves them back
 to Claude model aliases, so the old skill keeps working from one source of truth.
+Named `role_sets` select a whole backend (roles plus routing) without editing the
+default Claude tables.
+
+**Two real backends exist.** `factory/adapters/kilo.py` drives
+`kilo run --format json` with an isolated XDG config containing one generated
+agent. `factory/adapters/command_code.py` drives `cmd -p --output-format json`:
+read-only roles run in plan mode and the adapter writes their artifact from the
+final response, while the builder is the only role that gets write tools. Both
+normalize events, record usage, enforce cancellation and validate the artifact's
+first line before returning a result.
 
 **Contracts are versioned and adapter-neutral.** `core/contracts.py` defines the
 request, result and event shapes. A result has a terminal status, observed

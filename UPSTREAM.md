@@ -13,7 +13,9 @@ Claude Code implementation.
 The harness-agnostic foundation now exists alongside it: portable role
 instructions in `factory/roles/`, versioned invocation contracts, schema-versioned
 execution profiles, capability and permission validation, a deterministic fake
-adapter, a GitHub boundary, a controller skeleton and a test suite. The Claude
-skill and agents are still the working entry point; process-backed Kilo, Codex
-and Claude adapters are the next migration step. See
+adapter, a GitHub boundary, a controller skeleton and a test suite. Kilo Code and
+Command Code adapters are implemented; a Command Code run completed the full
+local loop (intake, spec, build, gate, review, approval) on a disposable fixture.
+The Claude skill and agents are still the working entry point; Codex and the
+Claude compatibility adapter are the next migration step. See
 [`docs/harness-agnostic-factory-spec.md`](docs/harness-agnostic-factory-spec.md).

@@ -19,15 +19,21 @@
     },
     "kilo": {
       "executable": "kilo",
-      "enabled": false,
+      "enabled": true,
       "version_command": ["--version"],
-      "verified_versions": []
+      "verified_versions": ["7.8.12"]
     },
     "codex": {
       "executable": "codex",
       "enabled": false,
       "version_command": ["--version"],
       "verified_versions": []
+    },
+    "command-code": {
+      "executable": "cmd",
+      "enabled": true,
+      "version_command": ["--version"],
+      "verified_versions": ["1.53.1"]
     },
     "fake": {
       "executable": null,
@@ -113,6 +119,114 @@
       "adapter": "fake",
       "model": "fake-model",
       "permission_profile": "builder"
+    },
+    "kilo-intake": {
+      "adapter": "kilo",
+      "provider": "openrouter",
+      "model": "openrouter/anthropic/claude-sonnet-4.5",
+      "permission_profile": "intake"
+    },
+    "kilo-spec": {
+      "adapter": "kilo",
+      "provider": "openrouter",
+      "model": "openrouter/anthropic/claude-sonnet-4.5",
+      "permission_profile": "spec"
+    },
+    "kilo-builder": {
+      "adapter": "kilo",
+      "provider": "openrouter",
+      "model": "openrouter/anthropic/claude-sonnet-4.5",
+      "permission_profile": "builder"
+    },
+    "kilo-approver": {
+      "adapter": "kilo",
+      "provider": "openrouter",
+      "model": "openrouter/anthropic/claude-sonnet-4.5",
+      "permission_profile": "approver"
+    },
+    "kilo-code-haiku": {
+      "adapter": "kilo",
+      "provider": "openrouter",
+      "model": "openrouter/anthropic/claude-haiku-4.5",
+      "permission_profile": "reviewer"
+    },
+    "kilo-code-sonnet": {
+      "adapter": "kilo",
+      "provider": "openrouter",
+      "model": "openrouter/anthropic/claude-sonnet-4.5",
+      "permission_profile": "reviewer"
+    },
+    "kilo-ux-sonnet": {
+      "adapter": "kilo",
+      "provider": "openrouter",
+      "model": "openrouter/anthropic/claude-sonnet-4.5",
+      "permission_profile": "reviewer"
+    },
+    "kilo-ui-haiku": {
+      "adapter": "kilo",
+      "provider": "openrouter",
+      "model": "openrouter/anthropic/claude-haiku-4.5",
+      "permission_profile": "reviewer"
+    },
+    "kilo-security-opus": {
+      "adapter": "kilo",
+      "provider": "openrouter",
+      "model": "openrouter/anthropic/claude-opus-5.5",
+      "permission_profile": "reviewer"
+    },
+    "cc-intake": {
+      "adapter": "command-code",
+      "provider": "commandcode",
+      "model": "moonshotai/kimi-k2.7-code",
+      "permission_profile": "intake"
+    },
+    "cc-spec": {
+      "adapter": "command-code",
+      "provider": "commandcode",
+      "model": "moonshotai/kimi-k2.7-code",
+      "permission_profile": "spec"
+    },
+    "cc-builder": {
+      "adapter": "command-code",
+      "provider": "commandcode",
+      "model": "moonshotai/kimi-k2.7-code",
+      "permission_profile": "builder"
+    },
+    "cc-approver": {
+      "adapter": "command-code",
+      "provider": "commandcode",
+      "model": "moonshotai/kimi-k2.7-code",
+      "permission_profile": "approver"
+    },
+    "cc-code-haiku": {
+      "adapter": "command-code",
+      "provider": "commandcode",
+      "model": "deepseek/deepseek-v4-flash",
+      "permission_profile": "reviewer"
+    },
+    "cc-code-sonnet": {
+      "adapter": "command-code",
+      "provider": "commandcode",
+      "model": "moonshotai/kimi-k2.7-code",
+      "permission_profile": "reviewer"
+    },
+    "cc-ux-sonnet": {
+      "adapter": "command-code",
+      "provider": "commandcode",
+      "model": "moonshotai/kimi-k2.7-code",
+      "permission_profile": "reviewer"
+    },
+    "cc-ui-haiku": {
+      "adapter": "command-code",
+      "provider": "commandcode",
+      "model": "deepseek/deepseek-v4-flash",
+      "permission_profile": "reviewer"
+    },
+    "cc-security-opus": {
+      "adapter": "command-code",
+      "provider": "commandcode",
+      "model": "moonshotai/kimi-k2.7-code",
+      "permission_profile": "reviewer"
     }
   },
   "roles": {
@@ -129,6 +243,26 @@
   "surface_reviewers": {
     "ui": { "ux": "claude-ux-sonnet", "ui": "claude-ui-haiku" },
     "security": { "security": "claude-security-opus" }
+  },
+  "default_role_set": "claude",
+  "role_sets": {
+    "command-code": {
+      "roles": {
+        "intake": "cc-intake",
+        "spec": "cc-spec",
+        "builder": "cc-builder",
+        "approver": "cc-approver"
+      },
+      "routing": {
+        "low":    { "code": "cc-code-haiku" },
+        "medium": { "code": "cc-code-sonnet" },
+        "high":   { "code": "cc-code-sonnet" }
+      },
+      "surface_reviewers": {
+        "ui": { "ux": "cc-ux-sonnet", "ui": "cc-ui-haiku" },
+        "security": { "security": "cc-security-opus" }
+      }
+    }
   },
   "limits": {
     "jobs": 3,

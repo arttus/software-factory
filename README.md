@@ -73,18 +73,27 @@ place while the Claude skill stays the working entry point:
 - `factory/core/` holds versioned invocation/result/event contracts, profile and
   routing resolution, capability and permission checks, artifact promotion,
   leases, a GitHub boundary and a controller skeleton.
-- `factory/adapters/` defines the adapter interface and a deterministic fake
-  harness used by the tests.
+- `factory/adapters/` defines the adapter interface plus three backends: a
+  deterministic fake harness, Kilo Code, and Command Code.
 - `factory/schemas/` documents config, invocation, result and event shapes.
 - `factory/bin/doctor` preflights config, profiles, roles and harness binaries.
-  `factory/bin/run --plan` resolves profiles and routing; `run --smoke` drives
-  one fake invocation through the controller.
+  `factory/bin/run --plan` resolves profiles and routing; `run --probe` prints
+  each adapter's capabilities; `run --smoke` drives one fake invocation.
 - `factory/checks.sh` now runs the project's real Python checks and test suite.
 
 Execution profiles in `factory/config.json` (`schema_version: 2`) name an
-adapter, model and permission profile. `factory/bin/route` resolves the same
-profiles back to Claude model aliases, so there is one routing source of truth
-during migration. Process-backed Kilo, Codex and Claude adapters come next; see
+adapter, model and permission profile. Named role sets select a backend without
+breaking the Claude path: `factory/bin/run --plan --role-set command-code`
+resolves the Command Code profiles, while the default set keeps the Claude skill
+working from the same routing source. `factory/bin/route` resolves the default
+profiles back to Claude model aliases.
+
+The Kilo adapter is qualified for one real intake run. The Command Code adapter
+has completed a full local loop on a disposable calculator repo: intake, spec,
+builder (edit, test, commit, push), a passing gate, code review, and approval.
+Read-only roles run in Command Code's plan mode and the adapter writes their
+artifact from the final response; only the builder runs with tools. Codex and
+the Claude compatibility adapter come next; see
 [`docs/harness-agnostic-factory-spec.md`](docs/harness-agnostic-factory-spec.md).
 
 ## The guide
@@ -126,10 +135,10 @@ factory/
   bin/gate                    runs checks.sh in a job's worktree → round-N/checks.md
   bin/route                   risk + surfaces → profiles → the job's reviewers
   bin/doctor                  preflight config, profiles, roles and harness binaries
-  bin/run                     controller entry point: --plan, --smoke
+  bin/run                     controller entry point: --plan, --probe, --smoke, --role-set
   roles/                      portable role instructions (canonical)
   core/                       contracts, config, capabilities, artifacts, leases, controller
-  adapters/                   adapter interface and deterministic fake harness
+  adapters/                   adapter interface, fake harness, Kilo and Command Code
   schemas/                    config, invocation, result and event schemas
   dashboard.html              the board
 tests/                        deterministic tests for transitions, contracts and adapters

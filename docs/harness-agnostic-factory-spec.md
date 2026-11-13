@@ -1,8 +1,9 @@
 # Harness agnostic software factory
 
 Status: foundation implemented (portable roles, contracts, profiles, capabilities,
-fake adapter, GitHub boundary, controller skeleton, deterministic tests);
-process-backed harness adapters pending  
+fake adapter, GitHub boundary, controller skeleton, deterministic tests); Kilo
+and Command Code adapters implemented and qualified; Codex and Claude
+compatibility adapters pending  
 Date: 2026-11-13  
 Baseline: standalone import commit `5d5fed8`  
 Primary initial backends: Kilo Code with OpenRouter, then Codex CLI  

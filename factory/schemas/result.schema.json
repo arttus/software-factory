@@ -35,6 +35,7 @@
       "properties": {
         "input_tokens": { "type": ["number", "null"] },
         "output_tokens": { "type": ["number", "null"] },
+        "reasoning_tokens": { "type": ["number", "null"] },
         "cache_read_tokens": { "type": ["number", "null"] },
         "cache_write_tokens": { "type": ["number", "null"] },
         "cost_usd": { "type": ["number", "null"] },

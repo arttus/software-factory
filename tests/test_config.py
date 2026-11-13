@@ -37,10 +37,10 @@ class RepoConfigTests(unittest.TestCase):
 
     def test_profile_on_disabled_adapter_is_rejected(self):
         raw = self.raw
-        raw["profiles"]["kilo-builder"] = {
-            "adapter": "kilo", "model": "some-model", "permission_profile": "builder"
+        raw["profiles"]["codex-builder"] = {
+            "adapter": "codex", "model": "some-model", "permission_profile": "builder"
         }
-        raw["roles"]["builder"] = "kilo-builder"
+        raw["roles"]["builder"] = "codex-builder"
         with self.assertRaises(ConfigError):
             self.build(raw)
 
@@ -67,6 +67,16 @@ class RepoConfigTests(unittest.TestCase):
         raw["limits"]["workers"] = 0
         with self.assertRaises(ConfigError):
             self.build(raw)
+
+    def test_command_code_role_set_resolves(self):
+        config = load_config(CONFIG, role_set="command-code")
+        self.assertEqual(config.role_set, "command-code")
+        self.assertEqual(config.role_profile("builder").adapter, "command-code")
+        self.assertEqual(config.reviewers_for("low")["code"].adapter, "command-code")
+
+    def test_unknown_role_set_is_rejected(self):
+        with self.assertRaises(ConfigError):
+            load_config(CONFIG, role_set="nope")
 
 
 if __name__ == "__main__":

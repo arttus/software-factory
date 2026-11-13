@@ -73,6 +73,7 @@ class FactoryConfig:
     surface_reviewers: dict[str, dict[str, str]]
     limits: dict
     merge_policy: str
+    role_set: str
     protected_paths: list[str] = field(default_factory=list)
 
     def profile(self, name: str) -> Profile:
@@ -118,13 +119,14 @@ class FactoryConfig:
         return {name: adapter for name, adapter in self.adapters.items() if adapter.enabled}
 
 
-def load_config(path: str | Path) -> FactoryConfig:
+def load_config(path: str | Path, role_set: str | None = None) -> FactoryConfig:
     path = Path(path)
     raw = json.loads(path.read_text())
-    return build_config(raw, path)
+    return build_config(raw, path, role_set=role_set)
 
 
-def build_config(raw: dict, path: str | Path = Path("config.json")) -> FactoryConfig:
+def build_config(raw: dict, path: str | Path = Path("config.json"),
+                 role_set: str | None = None) -> FactoryConfig:
     _require(isinstance(raw, dict), "config must be a JSON object")
     _require(raw.get("schema_version") == SCHEMA_VERSION,
              f"config.schema_version must be {SCHEMA_VERSION}")
@@ -142,19 +144,8 @@ def build_config(raw: dict, path: str | Path = Path("config.json")) -> FactoryCo
     permission_profiles = _build_permissions(raw.get("permission_profiles"))
     profiles = _build_profiles(raw.get("profiles"), adapters, permission_profiles)
 
-    roles = raw.get("roles")
-    _require(isinstance(roles, dict), "roles must be an object")
-    for role in BASE_ROLES:
-        name = roles.get(role)
-        _require(isinstance(name, str) and name in profiles,
-                 f"roles.{role} must reference a profile")
-        _require(adapters[profiles[name].adapter].enabled,
-                 f"roles.{role} uses profile {name!r} on disabled adapter "
-                 f"{profiles[name].adapter!r}")
-
-    routing = _build_routing(raw.get("routing"), profiles, adapters, "routing", RISKS)
-    surface_reviewers = _build_routing(raw.get("surface_reviewers"), profiles, adapters,
-                                       "surface_reviewers", SURFACES)
+    roles, routing, surface_reviewers, selected = _select_role_set(
+        raw, profiles, adapters, role_set)
 
     limits = raw.get("limits")
     _require(isinstance(limits, dict), "limits must be an object")
@@ -181,8 +172,47 @@ def build_config(raw: dict, path: str | Path = Path("config.json")) -> FactoryCo
         base_branch=base_branch, labels=labels, adapters=adapters,
         permission_profiles=permission_profiles, profiles=profiles, roles=roles,
         routing=routing, surface_reviewers=surface_reviewers, limits=limits,
-        merge_policy=merge_policy, protected_paths=protected,
+        merge_policy=merge_policy, role_set=selected, protected_paths=protected,
     )
+
+
+def _select_role_set(raw: dict, profiles: dict[str, Profile],
+                     adapters: dict[str, AdapterConfig],
+                     role_set: str | None) -> tuple[dict, dict, dict, str]:
+    """Choose the role/routing tables.
+
+    ``role_sets`` holds named alternatives (for example the Command Code
+    backend) while the top-level tables remain the working Claude path. A
+    selected set replaces roles, routing and surface reviewers together.
+    """
+    role_sets = raw.get("role_sets", {})
+    _require(isinstance(role_sets, dict), "role_sets must be an object")
+    selected = role_set or raw.get("default_role_set") or "claude"
+    _require(isinstance(selected, str) and selected, "default_role_set must be a string")
+
+    if selected in role_sets:
+        source = role_sets[selected]
+        _require(isinstance(source, dict), f"role_sets.{selected} must be an object")
+    else:
+        _require(selected == "claude", f"unknown role set {selected!r}")
+        source = {"roles": raw.get("roles"), "routing": raw.get("routing"),
+                  "surface_reviewers": raw.get("surface_reviewers")}
+
+    roles = source.get("roles")
+    _require(isinstance(roles, dict), f"role set {selected!r} needs roles")
+    for role in BASE_ROLES:
+        name = roles.get(role)
+        _require(isinstance(name, str) and name in profiles,
+                 f"role set {selected!r}: roles.{role} must reference a profile")
+        _require(adapters[profiles[name].adapter].enabled,
+                 f"role set {selected!r}: roles.{role} uses profile {name!r} on disabled "
+                 f"adapter {profiles[name].adapter!r}")
+
+    routing = _build_routing(source.get("routing"), profiles, adapters,
+                             f"role set {selected!r} routing", RISKS)
+    surface = _build_routing(source.get("surface_reviewers"), profiles, adapters,
+                             f"role set {selected!r} surface_reviewers", SURFACES)
+    return roles, routing, surface, selected
 
 
 def _build_adapters(raw: Any) -> dict[str, AdapterConfig]:

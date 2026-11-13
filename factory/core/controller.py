@@ -93,6 +93,14 @@ class Controller:
         permission_problems = check_permission_profile(request.role, permission)
         if permission_problems:
             raise ControllerError("; ".join(permission_problems))
+        if not request.permissions:
+            request.permissions = {
+                "shell": permission.shell,
+                "network": permission.network,
+                "write_scope": permission.write_scope,
+            }
+        if request.base_branch is None:
+            request.base_branch = self.config.base_branch
 
         invocation_dir = self.invocation_dir(request)
         invocation_dir.mkdir(parents=True, exist_ok=True)

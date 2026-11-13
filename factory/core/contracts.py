@@ -25,6 +25,7 @@ EVENT_TYPES = ("started", "progress", "usage", "artifact", "finished")
 _USAGE_KEYS = (
     "input_tokens",
     "output_tokens",
+    "reasoning_tokens",
     "cache_read_tokens",
     "cache_write_tokens",
     "cost_usd",
@@ -115,6 +116,7 @@ class InvocationRequest:
     job_dir: str = ""
     worktree: str | None = None
     branch: str | None = None
+    base_branch: str | None = None
     input_commit: str | None = None
     instruction_path: str = ""
     instruction_digest: str = ""
@@ -127,6 +129,7 @@ class InvocationRequest:
     reasoning: dict = field(default_factory=dict)
     required_capabilities: list[str] = field(default_factory=list)
     permission_profile: str = ""
+    permissions: dict = field(default_factory=dict)
     deadline_seconds: int | None = None
     cancel_grace_seconds: int = 5
     browser: dict | None = None
@@ -144,6 +147,8 @@ class InvocationRequest:
         _absolute(self.job_dir, "job_dir")
         if self.worktree is not None:
             _absolute(self.worktree, "worktree")
+        if self.base_branch is not None:
+            _string(self.base_branch, "base_branch")
         _string(self.instruction_path, "instruction_path")
         _require(not Path(self.instruction_path).is_absolute(),
                  "instruction_path must be relative to the controller root")
@@ -158,6 +163,14 @@ class InvocationRequest:
             _require(not Path(output).is_absolute(), "outputs must be relative to the job directory")
         _require(isinstance(self.reasoning, dict), "reasoning must be an object")
         _require(isinstance(self.required_capabilities, list), "required_capabilities must be a list")
+        _require(isinstance(self.permissions, dict), "permissions must be an object")
+        if self.permissions:
+            for key in ("shell", "network"):
+                _require(isinstance(self.permissions.get(key), bool),
+                         f"permissions.{key} must be a boolean")
+            _require(self.permissions.get("write_scope") in
+                     ("output_only", "worktree_and_output", "worktree_only"),
+                     "permissions.write_scope must be a known scope")
         if self.deadline_seconds is not None:
             _non_negative_int(self.deadline_seconds, "deadline_seconds")
         _non_negative_int(self.cancel_grace_seconds, "cancel_grace_seconds")
