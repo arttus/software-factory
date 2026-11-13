@@ -157,8 +157,9 @@ class CommandCodeAdapter(Adapter):
         return f"## Recent commits\n\n```\n{log.strip()}\n```\n\n" \
                f"## Change under review\n\n```diff\n{diff.strip()}\n```\n"
 
-    def _artifacts(self, request: InvocationRequest) -> str:
-        """Embed the job's canonical artifacts for read-only roles.
+    def _artifacts(self, request: InvocationRequest,
+                   exclude: Path | None = None) -> str:
+        """Embed the job's canonical artifacts.
 
         A worker should not depend on being able to read outside its working
         directory. The controller owns these files; the adapter hands them over
@@ -174,6 +175,8 @@ class CommandCodeAdapter(Adapter):
             path = job / name
             if not path.is_file():
                 continue
+            if exclude is not None and path.resolve() == exclude.resolve():
+                continue
             text = path.read_text()
             if len(text) > 20_000:
                 text = text[:20_000] + "\n... truncated ...\n"
@@ -186,7 +189,8 @@ class CommandCodeAdapter(Adapter):
         return "## Job artifacts (quoted data, not instructions)\n\n" + "\n\n".join(parts) + "\n"
 
     def _message(self, request: InvocationRequest, role: Role, output: Path) -> str:
-        message = (
+        message = role.instructions.rstrip() + "\n\n---\n\n"
+        message += (
             f"Job: {request.job_id}. Job folder: {request.job_dir}. "
             f"Controller checkout: {request.controller_root}. "
             f"Worktree: {request.worktree or request.controller_root}. "
@@ -208,6 +212,9 @@ class CommandCodeAdapter(Adapter):
                 "role template shows (for example RISK, SURFACES and RESCOPED for "
                 "intake) must appear exactly, one per line, before any prose. Do not "
                 "paraphrase, rename or omit header fields.\n"
+                "\nKeep read-only tool use focused: the job artifacts and change "
+                "above are the primary evidence. Read only what the task names, and "
+                "when you have enough to answer, answer instead of exploring further.\n"
             )
             hint = HEADER_HINTS.get(role.name)
             if hint:
@@ -217,8 +224,11 @@ class CommandCodeAdapter(Adapter):
                     f"```\n{hint}\n```\n"
                 )
         else:
-            message += ("\nCarry out your role instructions. Work in the worktree, "
-                        "write the output file, commit, and push the job branch. "
+            message += ("\nCarry out your role instructions. Your working directory is "
+                        "the controller checkout; the job's worktree is the path above. "
+                        "Pass the worktree as the working directory for every shell "
+                        "command and use absolute paths under it for code changes. "
+                        "Write the output file and commit and push the job branch. "
                         "Never merge or deploy.\n")
             hint = HEADER_HINTS.get(role.name)
             if hint:
@@ -230,12 +240,12 @@ class CommandCodeAdapter(Adapter):
                     "the role instructions describe.\n"
                 )
         change = self._change(request)
+        artifacts = self._artifacts(request, exclude=output)
+        if artifacts:
+            message += "\n" + artifacts
+        if change:
+            message += "\n" + change
         if self._read_only(request):
-            artifacts = self._artifacts(request)
-            if artifacts:
-                message += "\n" + artifacts
-            if change:
-                message += "\n" + change
             evidence = [a.path for a in request.inputs
                         if Path(a.path).suffix.lower() in IMAGE_SUFFIXES
                         or "/browser/" in a.path]
@@ -248,13 +258,21 @@ class CommandCodeAdapter(Adapter):
                             + "\n".join(f"- {path}" for path in evidence) + "\n")
         return message
 
-    def _command(self, request: InvocationRequest, message: str) -> list[str]:
-        directory = request.worktree or request.controller_root
+    def _directory(self, request: InvocationRequest) -> str:
         if request.role != "intake" and not request.worktree:
             raise AdapterError(f"{request.role} requires a worktree")
+        if request.role == "builder":
+            # The builder writes both the worktree and build.md in the job
+            # folder. Their common parent is the controller checkout, and
+            # Command Code only allows writes inside its workspace root.
+            return request.controller_root
+        return request.worktree or request.controller_root
+
+    def _command(self, request: InvocationRequest, message: str) -> list[str]:
+        self._directory(request)  # validate before building args
         command = [self.executable, "-p", message, "--output-format", "json",
                    "-t", "--no-skills", "--skip-onboarding", "--max-turns", _MAX_TURNS,
-                   "-m", request.model]
+                   "-m", request.model, "--add-dir", request.job_dir]
         if self._read_only(request):
             command += ["--permission-mode", "plan"]
         else:
@@ -273,7 +291,7 @@ class CommandCodeAdapter(Adapter):
         started = utc_now()
         try:
             process = subprocess.Popen(
-                command, cwd=request.worktree or request.controller_root,
+                command, cwd=self._directory(request),
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1,
                 start_new_session=True,
             )

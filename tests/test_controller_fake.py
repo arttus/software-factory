@@ -47,7 +47,7 @@ class ControllerFakeAdapterTests(unittest.TestCase):
         self.controller = Controller.from_config(
             self.config, self.root, adapters={"fake": self.adapter})
 
-    def test_run_records_evidence_and_returns_completed(self):
+    def test_run_records_evidence_under_the_job_dir(self):
         request = make_request(self.root)
         result = self.controller.run(request)
 
@@ -55,7 +55,7 @@ class ControllerFakeAdapterTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.invocation_id, request.invocation_id)
 
-        run_dir = self.root / "jobs" / "smoke" / "runs" / request.invocation_id
+        run_dir = Path(request.job_dir) / "runs" / request.invocation_id
         self.assertTrue((run_dir / "request.json").is_file())
         self.assertTrue((run_dir / "result.json").is_file())
         events = (run_dir / "events.jsonl").read_text().splitlines()

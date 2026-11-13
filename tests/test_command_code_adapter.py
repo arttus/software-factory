@@ -19,6 +19,8 @@ if "--version" in argv:
     print("1.53.1")
     sys.exit(0)
 
+if os.environ.get("FAKE_CWD"):
+    pathlib.Path(os.environ["FAKE_CWD"]).write_text(os.getcwd())
 log = os.environ.get("FAKE_LOG")
 if log:
     pathlib.Path(log).write_text(json.dumps(argv))
@@ -69,7 +71,8 @@ class CommandCodeAdapterTests(unittest.TestCase):
         self.worktree = self.root / ".worktrees" / "001-demo"
         self.worktree.mkdir(parents=True)
         self._old = {k: os.environ.get(k) for k in
-                     ("FAKE_LOG", "FAKE_MODE", "FAKE_FINAL", "FAKE_OUTPUT", "FAKE_WRITE_FILE")}
+                     ("FAKE_LOG", "FAKE_MODE", "FAKE_FINAL", "FAKE_OUTPUT",
+                      "FAKE_WRITE_FILE", "FAKE_CWD")}
 
     def tearDown(self):
         for key, value in self._old.items():
@@ -127,6 +130,8 @@ class CommandCodeAdapterTests(unittest.TestCase):
         self.assertEqual(argv[argv.index("--permission-mode") + 1], "plan")
         self.assertNotIn("--yolo", argv)
         self.assertNotIn("--tools-all", argv)
+        self.assertIn("--add-dir", argv)
+        self.assertEqual(argv[argv.index("--add-dir") + 1], str(self.job_dir))
         self.assertEqual(handle.result.usage["input_tokens"], 100)
         self.assertEqual(handle.result.usage["cache_read_tokens"], 5)
         self.assertEqual(handle.result.usage["cost_kind"], "unknown")
@@ -142,6 +147,9 @@ class CommandCodeAdapterTests(unittest.TestCase):
         os.environ["FAKE_WRITE_FILE"] = "1"
         os.environ["FAKE_OUTPUT"] = str(self.job_dir / "build.md")
         os.environ["FAKE_FINAL"] = "STATUS: READY\n"
+        (self.job_dir / "spec.md").write_text("SPEC: demo change\n")
+        cwd_log = self.root / "cwd.txt"
+        os.environ["FAKE_CWD"] = str(cwd_log)
         log = self.log_argv(request)
         handle = self.adapter.start(request)
         list(self.adapter.events(handle))
@@ -150,6 +158,10 @@ class CommandCodeAdapterTests(unittest.TestCase):
         self.assertEqual(argv[argv.index("--permission-mode") + 1], "auto-accept")
         self.assertIn("--yolo", argv)
         self.assertIn("--tools-all", argv)
+        self.assertIn("--add-dir", argv)
+        self.assertIn("You build one factory job", argv[argv.index("-p") + 1])
+        self.assertIn("SPEC: demo change", argv[argv.index("-p") + 1])
+        self.assertEqual(cwd_log.read_text(), str(REPO))
         self.assertTrue((self.job_dir / "build.md").is_file())
 
     def test_invalid_final_text_fails(self):
@@ -202,6 +214,7 @@ class CommandCodeAdapterTests(unittest.TestCase):
                                         self.job_dir / "round-1" / "review-code.md")
         self.assertIn("Job artifacts", message)
         self.assertIn("SPEC: demo", message)
+        self.assertIn("You are the code reviewer", message)
         self.assertIn("Change under review", message)
         self.assertIn("+two", message)
 

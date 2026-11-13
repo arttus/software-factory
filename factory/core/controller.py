@@ -77,7 +77,7 @@ class Controller:
         )
 
     def invocation_dir(self, request: InvocationRequest) -> Path:
-        return self.factory_root / "jobs" / request.job_id / "runs" / request.invocation_id
+        return Path(request.job_dir) / "runs" / request.invocation_id
 
     def run(self, request: InvocationRequest, adapter: Adapter | None = None) -> InvocationResult:
         request.validate()

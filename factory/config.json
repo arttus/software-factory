@@ -183,7 +183,7 @@
     "cc-spec": {
       "adapter": "command-code",
       "provider": "commandcode",
-      "model": "moonshotai/kimi-k2.7-code",
+      "model": "moonshotai/kimi-k3",
       "permission_profile": "spec"
     },
     "cc-builder": {
