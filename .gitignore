@@ -1,0 +1,5 @@
+/factory/jobs/
+/.worktrees/
+__pycache__/
+*.pyc
+.DS_Store
