@@ -29,6 +29,9 @@ If it is empty, treat it as `run`.
 Use these exact forms from the project root. The working controller backend in
 this repository is the `command-code` role set; pass it explicitly.
 
+If `factory/bin/run` does not exist, stop and tell the user the software
+factory is not installed in this project. Do not approximate it.
+
 - Drain the queue: `factory/bin/run --queue --role-set command-code`
 - Run or resume one issue: `factory/bin/run --job <issue-or-job> --role-set command-code`
 - Resolve what would run: `factory/bin/run --plan --role-set command-code`
